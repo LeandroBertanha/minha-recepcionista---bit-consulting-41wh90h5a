@@ -8,7 +8,16 @@ routerAdd(
 
     let instance
     try {
-      instance = $app.findFirstRecordByData('whatsapp_instances', 'user_id', e.auth.id)
+      const membership = $app.findFirstRecordByFilter(
+        'organization_members',
+        'user_id = {:userId} && status = "active" && (role = "owner" || role = "admin")',
+        { userId: e.auth.id },
+      )
+      instance = $app.findFirstRecordByData(
+        'whatsapp_instances',
+        'organization_id',
+        membership.getString('organization_id'),
+      )
     } catch (err) {
       return e.notFoundError('Instance not found')
     }
