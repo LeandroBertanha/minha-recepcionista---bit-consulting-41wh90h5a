@@ -1,4 +1,4 @@
-// onRecordAfterCreateSuccess listener for users and whatsapp_instances collections
+// Cria uma instância por organização e provisiona a integração na Evolution API.
 onRecordAfterCreateSuccess(
   (e) => {
     // Safely get the collection name to avoid TypeError
@@ -12,20 +12,33 @@ onRecordAfterCreateSuccess(
       colName = e.record.collectionName
     }
 
-    if (colName === 'users') {
+    if (colName === 'organization_members') {
       try {
-        const userId = e.record.id
-        const instanceName = 'user_' + userId
+        const role = e.record.getString('role')
+        if (e.record.getString('status') !== 'active' || (role !== 'owner' && role !== 'admin')) {
+          return e.next()
+        }
+
+        const userId = e.record.getString('user_id')
+        const organizationId = e.record.getString('organization_id')
+        if (!userId || !organizationId) return e.next()
+
+        try {
+          $app.findFirstRecordByData('whatsapp_instances', 'organization_id', organizationId)
+          return e.next()
+        } catch (_) {}
 
         const instancesCol = $app.findCollectionByNameOrId('whatsapp_instances')
         const instanceRecord = new Record(instancesCol)
         instanceRecord.set('user_id', userId)
-        instanceRecord.set('instance_name', instanceName)
+        instanceRecord.set('organization_id', organizationId)
+        instanceRecord.set('instance_name', 'org_' + organizationId)
         instanceRecord.set('status', 'pending')
         $app.saveNoValidate(instanceRecord)
       } catch (err) {
-        // Failsafe: Log error but don't crash the user registration request
-        $app.logger().error('Failed to create whatsapp_instance for user', 'error', String(err))
+        $app
+          .logger()
+          .error('Failed to create whatsapp_instance for organization', 'error', String(err))
       }
       return e.next()
     }
@@ -136,6 +149,6 @@ onRecordAfterCreateSuccess(
 
     return e.next()
   },
-  'users',
+  'organization_members',
   'whatsapp_instances',
 )
