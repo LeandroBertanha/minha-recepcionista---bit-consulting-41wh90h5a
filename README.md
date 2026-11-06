@@ -1,6 +1,6 @@
-# Projeto Criado com o Skip
+# BitZaap
 
-Este projeto foi criado de ponta a ponta com o [Skip](https://goskip.dev).
+Plataforma da Bit Consulting para centralizar atendimentos, organizar oportunidades e automatizar conversas no WhatsApp com inteligência artificial.
 
 ## 🚀 Stack Tecnológica
 
@@ -129,3 +129,29 @@ npm run build
 ```
 
 Os arquivos otimizados serão gerados na pasta `dist/` e estarão prontos para deploy.
+
+## 🔐 Integração com a Evolution API
+
+Configure os valores abaixo somente no gerenciador de segredos do Skip. Eles não devem ser
+incluídos no código ou enviados ao GitHub:
+
+- `EVOLUTION_API_URL`: URL HTTPS da instalação da Evolution API.
+- `EVOLUTION_API_KEY`: chave global utilizada pelo backend para administrar as instâncias.
+- `APP_WEBHOOK_URL`: URL pública do backend da BitZaap, sem barra no final.
+- `EVOLUTION_WEBHOOK_SECRET`: valor aleatório usado no cabeçalho
+  `X-Bitzaap-Webhook-Secret` para autenticar os webhooks.
+
+O endpoint autenticado `GET /backend/v1/integration/status` informa apenas se cada item foi
+configurado; nenhum segredo ou endereço é retornado ao navegador. O envio e a desconexão falham de
+forma segura quando a Evolution API não está disponível, evitando exibir mensagens como enviadas
+sem confirmação do provedor.
+
+### Hospedagem gratuita da Evolution API
+
+A configuração reproduzível para executar a integração em uma VM Oracle Cloud Always Free está em
+[`infra/evolution`](infra/evolution/README.md). Ela inclui Evolution API, PostgreSQL, Redis, HTTPS
+automático e armazenamento persistente, sem publicar banco ou cache diretamente na internet.
+
+Como alternativa de homologação sem custo e sem servidor em nuvem, o guia
+[`Execução gratuita no Mac`](infra/evolution/LOCAL-MAC.md) utiliza Podman Desktop e um domínio HTTPS
+gratuito do ngrok.

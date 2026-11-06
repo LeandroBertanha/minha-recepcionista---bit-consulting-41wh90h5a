@@ -27,10 +27,25 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Inter var', 'SF Pro Display', 'system-ui', 'sans-serif'],
-        display: ['SF Pro Display', 'Inter var', 'system-ui', 'sans-serif'],
+        sans: ['Manrope', 'system-ui', 'sans-serif'],
+        display: ['Manrope', 'system-ui', 'sans-serif'],
       },
       colors: {
+        brand: {
+          50: '#effcfb',
+          100: '#d7f7f4',
+          200: '#b3eee9',
+          300: '#7ee0da',
+          400: '#55cfca',
+          500: '#39bdb8',
+          600: '#289894',
+          700: '#247a78',
+          800: '#235f5f',
+          900: '#204f4f',
+        },
+        'bit-green': '#42ad35',
+        'bit-yellow': '#f8d261',
+        'bit-navy': '#0b3145',
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',

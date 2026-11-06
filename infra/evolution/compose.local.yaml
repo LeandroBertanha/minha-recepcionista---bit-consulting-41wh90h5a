@@ -1,0 +1,22 @@
+services:
+  evolution:
+    ports:
+      - '127.0.0.1:8080:8080'
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: unless-stopped
+    depends_on:
+      evolution:
+        condition: service_healthy
+    command:
+      - http
+      - evolution:8080
+      - --url
+      - https://${NGROK_DOMAIN}
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    ports:
+      - '127.0.0.1:4040:4040'
+    networks:
+      - internal

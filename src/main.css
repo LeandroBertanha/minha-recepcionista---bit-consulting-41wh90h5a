@@ -1,7 +1,6 @@
 /* Global styles - Theme, font, utilities, animations and global components */
 
-/* CHANGE THE FONT BELOW TO WHATEVER YOU WANT */
-@import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -9,9 +8,8 @@
 
 @layer base {
   :root {
-    /* Change the colors to match the design system */
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 174 33% 98%;
+    --foreground: 199 73% 16%;
 
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
@@ -19,8 +17,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: 222.2 84% 4.9%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 177 54% 48%;
+    --primary-foreground: 0 0% 100%;
 
     --secondary: 210 40% 98%;
     --secondary-foreground: 222.2 84% 4.9%;
@@ -36,25 +34,25 @@
 
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --ring: 177 54% 48%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
     --sidebar-background: 0 0% 98%;
 
     --sidebar-foreground: 222.2 84% 4.9%;
 
-    --sidebar-primary: 222.2 84% 4.9%;
+    --sidebar-primary: 177 54% 48%;
 
     --sidebar-primary-foreground: 0 0% 100%;
 
-    --sidebar-accent: 210 40% 98%;
+    --sidebar-accent: 174 55% 95%;
 
     --sidebar-accent-foreground: 222.2 84% 4.9%;
 
     --sidebar-border: 214.3 31.8% 91.4%;
 
-    --sidebar-ring: 222.2 84% 4.9%;
+    --sidebar-ring: 177 54% 48%;
 
     --chart-1: 34 100% 44%;
     --chart-2: 189 100% 38%;
@@ -112,6 +110,15 @@
   section[aria-label='Notifications alt+T'] {
     padding: 0 !important;
     margin: 0 !important;
+  }
+
+  [data-radix-scroll-area-viewport] > div {
+    display: block !important;
+  }
+
+  body {
+    font-family: 'Manrope', system-ui, sans-serif;
+    background: hsl(var(--background));
   }
 }
 
