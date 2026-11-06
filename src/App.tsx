@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AuthProvider, useAuth } from './hooks/use-auth'
+import pb from './lib/pocketbase/client'
 import type { LucideIcon } from 'lucide-react'
 import {
   AlertTriangle,
@@ -256,6 +257,49 @@ function DashboardApp() {
   const [dark, setDark] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [selectedConversation, setSelectedConversation] = useState(0)
+  const [tenant, setTenant] = useState<{ id: string; name: string; role: string } | null>(null)
+  const [tenantLoading, setTenantLoading] = useState(true)
+  const [tenantError, setTenantError] = useState('')
+
+  useEffect(() => {
+    let mounted = true
+
+    const loadTenant = async () => {
+      if (!user?.id) return
+      setTenantLoading(true)
+      setTenantError('')
+
+      try {
+        const membership = await pb
+          .collection('organization_members')
+          .getFirstListItem('user_id = "' + user.id + '" && status = "active"', {
+            expand: 'organization_id',
+          })
+        const organization = membership.expand?.organization_id
+        if (!organization) throw new Error('Organização não encontrada')
+
+        if (mounted) {
+          setTenant({
+            id: organization.id,
+            name: organization.name,
+            role: membership.role,
+          })
+        }
+      } catch (_error) {
+        if (mounted) {
+          setTenant(null)
+          setTenantError('Seu usuário ainda não possui acesso ativo a uma empresa.')
+        }
+      } finally {
+        if (mounted) setTenantLoading(false)
+      }
+    }
+
+    loadTenant()
+    return () => {
+      mounted = false
+    }
+  }, [user?.id])
 
   useEffect(() => {
     const stored = window.localStorage.getItem('minha-recepcionista-theme')
@@ -274,6 +318,49 @@ function DashboardApp() {
   const selectView = (id: ViewId) => {
     setActive(id)
     setSidebarOpen(false)
+  }
+
+  const roleLabel =
+    {
+      owner: 'Proprietário',
+      admin: 'Administrador',
+      supervisor: 'Supervisor',
+      agent: 'Atendente',
+      viewer: 'Somente leitura',
+    }[tenant?.role || ''] || 'Membro'
+
+  if (tenantLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#f4fbfa] text-slate-700 dark:bg-[#071318] dark:text-slate-200">
+        <div className="text-center">
+          <img
+            src="/bit-consulting-logo.webp"
+            alt="Bit Consulting"
+            className="mx-auto h-16 w-32 object-contain"
+          />
+          <p className="mt-4 text-sm font-semibold">Carregando sua empresa...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!tenant) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#f4fbfa] px-4 text-slate-900 dark:bg-[#071318] dark:text-slate-100">
+        <section className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-xl dark:border-white/10 dark:bg-[#0b1c22]">
+          <ShieldCheck className="mx-auto h-10 w-10 text-[#12bfc3]" />
+          <h1 className="mt-4 text-2xl font-extrabold">Acesso aguardando liberação</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">{tenantError}</p>
+          <button
+            type="button"
+            onClick={signOut}
+            className="mt-6 rounded-xl bg-[#12bfc3] px-5 py-3 text-sm font-bold text-white"
+          >
+            Sair da conta
+          </button>
+        </section>
+      </main>
+    )
   }
 
   return (
@@ -322,7 +409,7 @@ function DashboardApp() {
               Empresa ativa
             </p>
             <button className="mt-1 flex w-full items-center justify-between text-left text-sm font-semibold">
-              Bit Consulting <ChevronDown className="h-4 w-4 text-slate-400" />
+              {tenant.name} <ChevronDown className="h-4 w-4 text-slate-400" />
             </button>
           </div>
 
@@ -370,7 +457,7 @@ function DashboardApp() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{displayName}</p>
-                  <p className="text-xs text-slate-400">Conta autenticada</p>
+                  <p className="text-xs text-slate-400">{roleLabel}</p>
                 </div>
                 <button
                   type="button"
@@ -423,7 +510,7 @@ function DashboardApp() {
           </header>
 
           <div className="p-4 sm:p-6 lg:p-8">
-            {active === 'dashboard' && <Dashboard />}
+            {active === 'dashboard' && <Dashboard companyName={tenant.name} />}
             {active === 'inbox' && (
               <InboxView selected={selectedConversation} onSelect={setSelectedConversation} />
             )}
@@ -440,7 +527,7 @@ function DashboardApp() {
   )
 }
 
-function Dashboard() {
+function Dashboard({ companyName }: { companyName: string }) {
   const { user } = useAuth()
   const firstName = (user?.name || user?.email || 'usuário').split(' ')[0]
 
@@ -450,7 +537,7 @@ function Dashboard() {
         <div>
           <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Bom dia, {firstName}</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Acompanhe a operação da Bit Consulting em tempo real.
+            Acompanhe a operação da {companyName} em tempo real.
           </p>
         </div>
         <div className="flex items-center gap-2">
