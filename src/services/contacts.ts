@@ -1,7 +1,6 @@
 import pb from '@/lib/pocketbase/client'
 
-export const getContacts = (userId: string) =>
+export const getContacts = () =>
   pb.collection('whatsapp_contacts').getFullList({
-    filter: `user_id = "${userId}"`,
     sort: '-updated',
   })
