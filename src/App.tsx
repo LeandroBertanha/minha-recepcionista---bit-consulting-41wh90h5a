@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { AuthProvider, useAuth } from './hooks/use-auth'
 import type { LucideIcon } from 'lucide-react'
 import {
   AlertTriangle,
@@ -241,7 +242,16 @@ function StatusPill({
   )
 }
 
-function App() {
+function DashboardApp() {
+  const { user, signOut } = useAuth()
+  const displayName = user?.name || user?.email || 'Usuário'
+  const initials =
+    displayName
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part: string) => part[0]?.toUpperCase())
+      .join('') || 'US'
   const [active, setActive] = useState<ViewId>('dashboard')
   const [dark, setDark] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -356,13 +366,21 @@ function App() {
             <div className="rounded-xl bg-slate-50 p-3 dark:bg-white/[0.04]">
               <div className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#43ae37] text-sm font-bold text-white">
-                  LB
+                  {initials}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">Leandro Bertanha</p>
-                  <p className="text-xs text-slate-400">Administrador</p>
+                  <p className="truncate text-sm font-semibold">{displayName}</p>
+                  <p className="text-xs text-slate-400">Conta autenticada</p>
                 </div>
-                <MoreHorizontal className="h-4 w-4 text-slate-400" />
+                <button
+                  type="button"
+                  onClick={signOut}
+                  className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white"
+                  aria-label="Sair da conta"
+                  title="Sair da conta"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
             </div>
           </div>
@@ -423,11 +441,14 @@ function App() {
 }
 
 function Dashboard() {
+  const { user } = useAuth()
+  const firstName = (user?.name || user?.email || 'usuário').split(' ')[0]
+
   return (
     <div className="mx-auto max-w-[1600px] space-y-6">
       <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Bom dia, Leandro</h2>
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Bom dia, {firstName}</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Acompanhe a operação da Bit Consulting em tempo real.
           </p>
@@ -1161,6 +1182,156 @@ function ModuleView({ id }: { id: ViewId }) {
         </div>
       </section>
     </div>
+  )
+}
+
+function AuthenticatedApp() {
+  const { user, loading, signIn } = useAuth()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const [loginDark, setLoginDark] = useState(
+    () => window.localStorage.getItem('minha-recepcionista-theme') === 'dark',
+  )
+
+  useEffect(() => {
+    window.localStorage.setItem('minha-recepcionista-theme', loginDark ? 'dark' : 'light')
+  }, [loginDark])
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!email.trim() || !password) {
+      setError('Informe seu e-mail e sua senha.')
+      return
+    }
+
+    setSubmitting(true)
+    setError('')
+    const result = await signIn(email.trim(), password)
+    if (result.error) {
+      setError('Não foi possível entrar. Confira o e-mail e a senha.')
+    }
+    setSubmitting(false)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#f4fbfa] text-slate-700 dark:bg-[#071318] dark:text-slate-200">
+        <div className="text-center">
+          <img
+            src="/bit-consulting-logo.webp"
+            alt="Bit Consulting"
+            className="mx-auto h-16 w-32 object-contain"
+          />
+          <p className="mt-4 text-sm font-semibold">Carregando ambiente seguro...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (user) return <DashboardApp />
+
+  return (
+    <div className={loginDark ? 'dark' : ''}>
+      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#effaf9] px-4 py-10 text-slate-900 transition-colors dark:bg-[#071318] dark:text-slate-100">
+        <div className="absolute left-[-10%] top-[-20%] h-96 w-96 rounded-full bg-[#12bfc3]/15 blur-3xl" />
+        <div className="absolute bottom-[-20%] right-[-10%] h-96 w-96 rounded-full bg-[#43ae37]/10 blur-3xl" />
+
+        <button
+          type="button"
+          onClick={() => setLoginDark((value) => !value)}
+          className="absolute right-5 top-5 rounded-xl border border-slate-200 bg-white/80 p-3 text-slate-600 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-200"
+          aria-label={loginDark ? 'Ativar modo claro' : 'Ativar modo escuro'}
+        >
+          {loginDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+        </button>
+
+        <section className="relative w-full max-w-md rounded-[28px] border border-white/80 bg-white/90 p-7 shadow-2xl shadow-[#0a6b6d]/10 backdrop-blur-xl dark:border-white/10 dark:bg-[#0b1c22]/95 dark:shadow-black/30 sm:p-9">
+          <div className="flex flex-col items-center text-center">
+            <img
+              src="/bit-consulting-logo.webp"
+              alt="Bit Consulting"
+              className="h-20 w-40 object-contain"
+            />
+            <p className="mt-5 text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#0aa6aa]">
+              WhatsApp com IA
+            </p>
+            <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Minha Recepcionista</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+              Acesse o ambiente seguro da sua operação.
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+            <div>
+              <label htmlFor="login-email" className="mb-2 block text-sm font-bold">
+                E-mail
+              </label>
+              <input
+                id="login-email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="seu@email.com"
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#12bfc3] focus:ring-4 focus:ring-[#12bfc3]/10 dark:border-white/10 dark:bg-white/[0.05]"
+              />
+            </div>
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <label htmlFor="login-password" className="text-sm font-bold">
+                  Senha
+                </label>
+                <span className="text-xs font-semibold text-slate-400">Acesso administrativo</span>
+              </div>
+              <input
+                id="login-password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Digite sua senha"
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#12bfc3] focus:ring-4 focus:ring-[#12bfc3]/10 dark:border-white/10 dark:bg-white/[0.05]"
+              />
+            </div>
+
+            {error && (
+              <div
+                role="alert"
+                className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 dark:border-red-400/20 dark:bg-red-400/10 dark:text-red-300"
+              >
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex w-full items-center justify-center rounded-xl bg-[#12bfc3] px-4 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-[#12bfc3]/25 transition hover:bg-[#0aaeb2] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {submitting ? 'Entrando...' : 'Entrar no sistema'}
+            </button>
+          </form>
+
+          <div className="mt-6 flex items-start gap-3 rounded-xl bg-[#12bfc3]/[0.07] p-4 text-xs leading-5 text-slate-600 dark:bg-[#12bfc3]/10 dark:text-slate-300">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#0aa6aa]" />
+            <p>
+              O acesso é restrito a usuários cadastrados. Novos membros serão convidados por um
+              administrador.
+            </p>
+          </div>
+        </section>
+      </main>
+    </div>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AuthenticatedApp />
+    </AuthProvider>
   )
 }
 
