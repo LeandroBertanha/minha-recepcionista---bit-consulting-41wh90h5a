@@ -21,6 +21,8 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
   try {
     const instance = $app.findFirstRecordByData('whatsapp_instances', 'instance_name', instanceName)
     const userId = instance.getString('user_id')
+    const organizationId = instance.getString('organization_id')
+    if (!organizationId) throw new Error('Instance without organization')
 
     if (body.event === 'connection.update' || body.event === 'CONNECTION_UPDATE') {
       const state = body.data?.state
@@ -137,11 +139,11 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
       try {
         const records = $app.findRecordsByFilter(
           'whatsapp_contacts',
-          `user_id = {:userId} && remote_jid = {:jid}`,
+          `organization_id = {:organizationId} && remote_jid = {:jid}`,
           '-created',
           1,
           0,
-          { userId: userId, jid: remoteJid },
+          { organizationId: organizationId, jid: remoteJid },
         )
         if (records.length > 0) {
           contact = records[0]
@@ -152,6 +154,7 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
         const contactsCol = $app.findCollectionByNameOrId('whatsapp_contacts')
         contact = new Record(contactsCol)
         contact.set('user_id', userId)
+        contact.set('organization_id', organizationId)
         contact.set('instance_id', instance.id)
         contact.set('remote_jid', remoteJid)
         contact.set('name', pushName)
@@ -168,6 +171,7 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
         const msgsCol = $app.findCollectionByNameOrId('whatsapp_messages')
         const msgRecord = new Record(msgsCol)
         msgRecord.set('user_id', userId)
+        msgRecord.set('organization_id', organizationId)
         msgRecord.set('instance_id', instance.id)
         msgRecord.set('contact_id', contact.id)
         msgRecord.set('remote_jid', remoteJid)
