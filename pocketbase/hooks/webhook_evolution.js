@@ -18,6 +18,13 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
   const instanceName = body.instance
   if (!instanceName) return e.json(200, { ok: true })
 
+  console.info(
+    'Evolution webhook event',
+    body.event || 'unknown',
+    'hasMessage',
+    !!body.data?.message,
+  )
+
   try {
     const instance = $app.findFirstRecordByData('whatsapp_instances', 'instance_name', instanceName)
     const userId = instance.getString('user_id')
@@ -228,6 +235,8 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
     }
   } catch (err) {
     $app.logger().error('Webhook Error', 'error', String(err))
+    console.error('Evolution webhook processing failed', String(err))
+    return e.json(500, { ok: false, error: 'Message processing failed' })
   }
 
   return e.json(200, { ok: true })
