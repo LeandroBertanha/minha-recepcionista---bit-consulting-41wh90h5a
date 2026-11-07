@@ -43,14 +43,19 @@ routerAdd(
     }
     try {
       const name = encodeURIComponent(instanceName)
-      const request = (path, method, body) =>
-        $http.send({
+      const request = (path, method, body) => {
+        const options = {
           url: evoUrl + path,
           method: method || 'GET',
-          headers: { apikey: evoKey, 'Content-Type': 'application/json' },
-          ...(body ? { body: JSON.stringify(body) } : {}),
+          headers: { apikey: evoKey },
           timeout: 20,
-        })
+        }
+        if (body) {
+          options.headers['Content-Type'] = 'application/json'
+          options.body = JSON.stringify(body)
+        }
+        return $http.send(options)
+      }
       const ok = (res) => res.statusCode >= 200 && res.statusCode < 300
       const reject = (res, step) => {
         $app.logger().error('Evolution request failed', 'step', step, 'status', res.statusCode)
@@ -106,16 +111,10 @@ routerAdd(
       }
       $app.saveNoValidate(instance)
     } catch (err) {
-      const diagnostic = String(err)
-        .split(evoKey)
-        .join('[redacted]')
-        .split(webhookSecret)
-        .join('[redacted]')
-      $app.logger().error('Evolution QR transport error', 'error', diagnostic)
+      $app.logger().error('Evolution QR transport error')
       return e.json(502, {
         message:
           'Não foi possível acessar a Evolution API. Verifique o servidor e tente novamente.',
-        diagnostic,
       })
     }
     return e.json(200, {
