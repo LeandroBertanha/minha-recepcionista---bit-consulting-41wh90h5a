@@ -15,11 +15,21 @@ export type IntegrationStatus = {
   }
 }
 
-export const getInstances = () =>
-  pb.collection('whatsapp_instances').getFullList({ sort: '-created' })
+export const getInstances = (organizationId?: string) =>
+  pb.collection('whatsapp_instances').getFullList({
+    sort: '-created',
+    filter: organizationId
+      ? pb.filter('organization_id = {:organizationId}', { organizationId })
+      : '',
+  })
 
-export const getContacts = () =>
-  pb.collection('whatsapp_contacts').getFullList({ sort: '-last_message_at' })
+export const getContacts = (organizationId?: string) =>
+  pb.collection('whatsapp_contacts').getFullList({
+    sort: '-last_message_at',
+    filter: organizationId
+      ? pb.filter('organization_id = {:organizationId}', { organizationId })
+      : '',
+  })
 
 export const getIntegrationStatus = () =>
   pb.send<IntegrationStatus>('/backend/v1/integration/status', { method: 'GET' })
@@ -33,7 +43,10 @@ export const getMessages = (contactId: string) =>
     .getFullList({ filter: `contact_id = '${contactId}'`, sort: 'sent_at' })
 
 export const fetchInstanceQR = (instanceId: string) =>
-  pb.send(`/backend/v1/instance/${instanceId}/qr`, { method: 'GET' })
+  pb.send<{ status: string; qrcode: string; pending?: boolean }>(
+    `/backend/v1/instance/${instanceId}/qr`,
+    { method: 'GET' },
+  )
 
 export const sendMessage = (
   contactId: string,
