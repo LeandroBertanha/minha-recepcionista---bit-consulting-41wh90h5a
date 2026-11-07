@@ -24,13 +24,24 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
     const organizationId = instance.getString('organization_id')
     if (!organizationId) throw new Error('Instance without organization')
 
+    if (body.event === 'qrcode.updated' || body.event === 'QRCODE_UPDATED') {
+      const qr = body.data?.qrcode?.base64 || body.data?.base64
+      if (qr && instance.getString('status') !== 'connected') {
+        instance.set('qrcode', qr)
+        instance.set('status', 'connecting')
+        $app.saveNoValidate(instance)
+      }
+      return e.json(200, { ok: true })
+    }
     if (body.event === 'connection.update' || body.event === 'CONNECTION_UPDATE') {
       const state = body.data?.state
       if (state === 'open') {
         instance.set('status', 'connected')
+        instance.set('qrcode', '')
         $app.saveNoValidate(instance)
       } else if (state === 'close' || state === 'refused') {
         instance.set('status', 'disconnected')
+        instance.set('qrcode', '')
         $app.saveNoValidate(instance)
       }
       return e.json(200, { ok: true })
