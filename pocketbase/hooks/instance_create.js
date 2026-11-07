@@ -73,7 +73,7 @@ onRecordAfterCreateSuccess(
               byEvents: false,
               base64: false,
               enabled: true,
-              events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE'],
+              events: ['QRCODE_UPDATED', 'MESSAGES_UPSERT', 'CONNECTION_UPDATE'],
               headers: {
                 'X-Bitzaap-Webhook-Secret': webhookSecret,
               },
@@ -95,13 +95,15 @@ onRecordAfterCreateSuccess(
                 method: 'POST',
                 headers: { apikey: evoKey, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  enabled: true,
-                  url: webhookUrl + '/backend/v1/webhook/evolution',
-                  webhookByEvents: false,
-                  webhookBase64: false,
-                  events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE'],
-                  headers: {
-                    'X-Bitzaap-Webhook-Secret': webhookSecret,
+                  webhook: {
+                    enabled: true,
+                    url: webhookUrl + '/backend/v1/webhook/evolution',
+                    byEvents: false,
+                    base64: false,
+                    events: ['QRCODE_UPDATED', 'MESSAGES_UPSERT', 'CONNECTION_UPDATE'],
+                    headers: {
+                      'X-Bitzaap-Webhook-Secret': webhookSecret,
+                    },
                   },
                 }),
                 timeout: 15,
