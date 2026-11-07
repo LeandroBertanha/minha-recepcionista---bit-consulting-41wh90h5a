@@ -28,13 +28,17 @@ cronAdd('crm_status_updates', '*/1 * * * *', () => {
 
   for (const contact of waiting) {
     try {
+      const instanceId = contact.getString('instance_id')
+      const organizationId = contact.getString('organization_id')
+      const instance = $app.findRecordById('whatsapp_instances', instanceId)
+      if (instance.getString('organization_id') !== organizationId) continue
       const messages = $app.findRecordsByFilter(
         'whatsapp_messages',
-        'contact_id = {:contactId}',
+        'contact_id = {:contactId} && instance_id = {:instanceId} && organization_id = {:organizationId}',
         'created',
         50,
         0,
-        { contactId: contact.id },
+        { contactId: contact.id, instanceId, organizationId },
       )
 
       let historyText = messages
@@ -51,9 +55,11 @@ cronAdd('crm_status_updates', '*/1 * * * *', () => {
       try {
         const agent = $app.findFirstRecordByFilter(
           'ai_agents',
-          'organization_id = {:organizationId}',
+          'organization_id = {:organizationId} && instance_id = {:instanceId} && user_id = {:userId}',
           {
-            organizationId: contact.getString('organization_id'),
+            organizationId,
+            instanceId,
+            userId: instance.getString('user_id'),
           },
         )
         provider = agent.getString('provider')

@@ -1,0 +1,2964 @@
+diff --git a/README.md b/README.md
+index 5714e9a..929ff58 100644
+--- a/README.md
++++ b/README.md
+@@ -7,7 +7,7 @@ Plataforma multitenant da Bit Consulting para centralizar atendimentos, organiza
+ - autenticação real com PocketBase;
+ - temas claro e escuro com identidade visual da Bit Consulting;
+ - empresas e membros com papéis de proprietário, administrador, supervisor, atendente e somente leitura;
+-- regras de acesso por empresa no backend;
++- regras de acesso por empresa e sessões individuais de WhatsApp no backend;
+ - painel responsivo publicado no Preview do SKIP.
+ 
+ ## 🚀 Stack Tecnológica
+@@ -166,16 +166,53 @@ A migration `0015_multitenant_organization_scope.js` vincula instâncias, contat
+ agentes e documentos a uma organização. Registros anteriores são migrados sem exclusão, usando a
+ associação ativa do proprietário.
+ 
+-As permissões são aplicadas no backend:
++As permissões são aplicadas no backend. A migration `0016_whatsapp_user_scope.js` mantém o
++vínculo com a empresa e separa o WhatsApp de cada login:
+ 
+-- membros ativos podem visualizar somente os dados da própria organização;
+-- proprietários, administradores, supervisores e atendentes podem operar o atendimento;
++- cada usuário conecta seu próprio aparelho; ser administrador da mesma empresa não compartilha
++  a sessão, o QR Code, os contatos ou as mensagens de outro usuário;
++- somente membros ativos de uma empresa ativa acessam sua própria instância e os dados associados;
++- proprietários, administradores, supervisores e atendentes podem operar o próprio atendimento;
+ - perfis de somente leitura não podem enviar mensagens ou alterar registros;
+-- conexão e desconexão do WhatsApp ficam restritas a proprietários e administradores;
++- conexão e desconexão ficam restritas a proprietários e administradores, sempre na própria sessão;
+ - instâncias e mensagens só podem ser criadas pelos hooks autenticados do backend.
+ 
+-O rollback dessa migration é intencionalmente não destrutivo e não remove organizações, vínculos
+-ou dados operacionais.
++A sessão existente e seu histórico são preservados. O nome, o proprietário e o estado de conexão
++de uma instância anterior não são alterados pela migration. Um usuário sem sessão própria deve
++provisioná-la no fluxo de conexão e parear seu próprio WhatsApp; a conexão de outro membro não é
++usada como alternativa.
++
++A propriedade de contatos e mensagens é determinada pela instância. O campo `user_id` de uma
++mensagem antiga pode registrar o atendente que a enviou e não é reatribuído. Agentes, documentos e,
++quando existentes, seus trechos seguem a mesma cadeia de propriedade. Mídias de mensagens passam
++a exigir autorização com token de arquivo e permissão de leitura da sessão.
++
++A migration adiciona unicidade para instâncias por `(organization_id, user_id)` e mensagens por
++`(instance_id, message_id)`, substituindo somente o índice global `idx_wm_id`. Contatos recebem um
++índice não único por `(instance_id, remote_jid)` para preservar possíveis duplicidades legadas.
++Caso já existam duas instâncias do mesmo usuário na mesma empresa, a execução é interrompida
++antes de salvar as alterações, sem escolher nem apagar uma delas. Não são criadas instâncias,
++excluídos registros ou reatribuídos históricos por essa migration.
++
++Os rollbacks de isolamento são intencionalmente não destrutivos. A `0016` também não reabre o
++acesso compartilhado às sessões de outros usuários; qualquer reversão de autorização exige uma
++nova migration revisada.
++
++### Validação das sessões individuais
++
++1. Conferir antes da publicação as instâncias, seus proprietários e eventuais pares duplicados de
++   empresa/usuário; registrar o nome e o estado da conexão que já está em uso.
++2. Entrar com dois administradores da mesma empresa e confirmar que cada um vê somente sua sessão.
++   Um login novo deve iniciar sem conexão e apresentar seu próprio fluxo de pareamento.
++3. Conferir que QR Code, envio e desconexão de uma sessão alheia são negados antes de chamar a
++   Evolution API, inclusive quando o solicitante é administrador da empresa.
++4. Validar o recebimento do mesmo contato em dois números diferentes, sem misturar conversas.
++   Repetir o webhook na mesma sessão deve ser idempotente; o mesmo ID de mensagem em outra sessão
++   deve ser aceito como um evento distinto.
++5. Validar mensagens históricas com autor diferente do dono da instância e a leitura de mídias:
++   o dono continua com acesso e outro usuário não pode acessar o arquivo por URL direta.
++6. Confirmar que resposta automática e classificação usam apenas o histórico e o agente da sessão
++   correspondente, e que a conexão anterior permanece com o mesmo nome e estado após a mudança.
+ 
+ ### Hospedagem gratuita da Evolution API
+ 
+diff --git a/pocketbase/hooks/crm_cron.js b/pocketbase/hooks/crm_cron.js
+index a4a7f7c..ab0f056 100644
+--- a/pocketbase/hooks/crm_cron.js
++++ b/pocketbase/hooks/crm_cron.js
+@@ -28,13 +28,17 @@ cronAdd('crm_status_updates', '*/1 * * * *', () => {
+ 
+   for (const contact of waiting) {
+     try {
++      const instanceId = contact.getString('instance_id')
++      const organizationId = contact.getString('organization_id')
++      const instance = $app.findRecordById('whatsapp_instances', instanceId)
++      if (instance.getString('organization_id') !== organizationId) continue
+       const messages = $app.findRecordsByFilter(
+         'whatsapp_messages',
+-        'contact_id = {:contactId}',
++        'contact_id = {:contactId} && instance_id = {:instanceId} && organization_id = {:organizationId}',
+         'created',
+         50,
+         0,
+-        { contactId: contact.id },
++        { contactId: contact.id, instanceId, organizationId },
+       )
+ 
+       let historyText = messages
+@@ -51,9 +55,11 @@ cronAdd('crm_status_updates', '*/1 * * * *', () => {
+       try {
+         const agent = $app.findFirstRecordByFilter(
+           'ai_agents',
+-          'organization_id = {:organizationId}',
++          'organization_id = {:organizationId} && instance_id = {:instanceId} && user_id = {:userId}',
+           {
+-            organizationId: contact.getString('organization_id'),
++            organizationId,
++            instanceId,
++            userId: instance.getString('user_id'),
+           },
+         )
+         provider = agent.getString('provider')
+diff --git a/pocketbase/hooks/instance_create.js b/pocketbase/hooks/instance_create.js
+index 5706c0e..9e4b2a3 100644
+--- a/pocketbase/hooks/instance_create.js
++++ b/pocketbase/hooks/instance_create.js
+@@ -1,4 +1,4 @@
+-// Cria uma instância por organização e provisiona a integração na Evolution API.
++// Cria uma instância por usuário da organização e preserva as sessões existentes.
+ onRecordAfterCreateSuccess(
+   (e) => {
+     // Safely get the collection name to avoid TypeError
+@@ -24,7 +24,11 @@ onRecordAfterCreateSuccess(
+         if (!userId || !organizationId) return e.next()
+ 
+         try {
+-          $app.findFirstRecordByData('whatsapp_instances', 'organization_id', organizationId)
++          $app.findFirstRecordByFilter(
++            'whatsapp_instances',
++            'organization_id = {:organizationId} && user_id = {:userId}',
++            { organizationId, userId },
++          )
+           return e.next()
+         } catch (_) {}
+ 
+@@ -32,13 +36,11 @@ onRecordAfterCreateSuccess(
+         const instanceRecord = new Record(instancesCol)
+         instanceRecord.set('user_id', userId)
+         instanceRecord.set('organization_id', organizationId)
+-        instanceRecord.set('instance_name', 'org_' + organizationId)
++        instanceRecord.set('instance_name', 'org_' + organizationId + '_user_' + userId)
+         instanceRecord.set('status', 'pending')
+         $app.saveNoValidate(instanceRecord)
+       } catch (err) {
+-        $app
+-          .logger()
+-          .error('Failed to create whatsapp_instance for organization', 'error', String(err))
++        $app.logger().error('Failed to create dedicated whatsapp_instance', 'error', String(err))
+       }
+       return e.next()
+     }
+diff --git a/pocketbase/hooks/instance_ensure.js b/pocketbase/hooks/instance_ensure.js
+new file mode 100644
+index 0000000..05a6f77
+--- /dev/null
++++ b/pocketbase/hooks/instance_ensure.js
+@@ -0,0 +1,68 @@
++routerAdd(
++  'POST',
++  '/backend/v1/instance/ensure',
++  (e) => {
++    const userId = e.auth.id
++    const body = e.requestInfo().body || {}
++    const requestedOrganizationId = body.organization_id || ''
++    let organizationId
++
++    try {
++      const membership = $app.findFirstRecordByFilter(
++        'organization_members',
++        'user_id = {:userId} && status = "active"' +
++          (requestedOrganizationId ? ' && organization_id = {:organizationId}' : ''),
++        { userId, organizationId: requestedOrganizationId },
++      )
++      const role = membership.getString('role')
++      if (role !== 'owner' && role !== 'admin') return e.forbiddenError('Access denied')
++      organizationId = membership.getString('organization_id')
++      const organization = $app.findRecordById('organizations', organizationId)
++      if (organization.getString('status') !== 'active') return e.forbiddenError('Access denied')
++    } catch (_) {
++      return e.forbiddenError('Access denied')
++    }
++
++    const findOwnInstance = () =>
++      $app.findFirstRecordByFilter(
++        'whatsapp_instances',
++        'organization_id = {:organizationId} && user_id = {:userId}',
++        { organizationId, userId },
++      )
++
++    try {
++      const existing = findOwnInstance()
++      if (
++        existing.getString('user_id') !== userId ||
++        existing.getString('organization_id') !== organizationId
++      )
++        return e.forbiddenError('Access denied')
++      return e.json(200, { instance: existing, created: false })
++    } catch (_) {}
++
++    const instance = new Record($app.findCollectionByNameOrId('whatsapp_instances'))
++    instance.set('user_id', userId)
++    instance.set('organization_id', organizationId)
++    instance.set('instance_name', 'org_' + organizationId + '_user_' + userId)
++    instance.set('status', 'pending')
++    instance.set('qrcode', '')
++
++    try {
++      $app.save(instance)
++      return e.json(201, { instance, created: true })
++    } catch (_) {
++      // O índice único resolve duas solicitações simultâneas sem duplicar a sessão.
++      try {
++        const existing = findOwnInstance()
++        if (
++          existing.getString('user_id') === userId &&
++          existing.getString('organization_id') === organizationId
++        )
++          return e.json(200, { instance: existing, created: false })
++      } catch (_) {}
++      $app.logger().error('Failed to prepare dedicated WhatsApp instance')
++      return e.json(500, { message: 'Não foi possível preparar seu WhatsApp. Tente novamente.' })
++    }
++  },
++  $apis.requireAuth(),
++)
+diff --git a/pocketbase/hooks/instance_logout.js b/pocketbase/hooks/instance_logout.js
+index 3cfaa82..74b7b50 100644
+--- a/pocketbase/hooks/instance_logout.js
++++ b/pocketbase/hooks/instance_logout.js
+@@ -13,11 +13,19 @@ routerAdd(
+         'user_id = {:userId} && status = "active" && (role = "owner" || role = "admin")',
+         { userId: e.auth.id },
+       )
+-      instance = $app.findFirstRecordByData(
++      const organizationId = membership.getString('organization_id')
++      const organization = $app.findRecordById('organizations', organizationId)
++      if (organization.getString('status') !== 'active') return e.forbiddenError('Access denied')
++      instance = $app.findFirstRecordByFilter(
+         'whatsapp_instances',
+-        'organization_id',
+-        membership.getString('organization_id'),
++        'organization_id = {:organizationId} && user_id = {:userId}',
++        { organizationId, userId: e.auth.id },
+       )
++      if (
++        instance.getString('user_id') !== e.auth.id ||
++        instance.getString('organization_id') !== organizationId
++      )
++        return e.forbiddenError('Access denied')
+     } catch (err) {
+       return e.notFoundError('Instance not found')
+     }
+diff --git a/pocketbase/hooks/instance_qr.js b/pocketbase/hooks/instance_qr.js
+index 45be4b9..7c9499c 100644
+--- a/pocketbase/hooks/instance_qr.js
++++ b/pocketbase/hooks/instance_qr.js
+@@ -10,25 +10,24 @@ routerAdd(
+       return e.notFoundError('Instance not found')
+     }
+ 
++    if (instance.getString('user_id') !== e.auth?.id) {
++      return e.forbiddenError('Access denied')
++    }
++
+     const organizationId = instance.getString('organization_id')
+     let hasOrganizationAccess = false
+     try {
+       const organization = $app.findRecordById('organizations', organizationId)
+-      hasOrganizationAccess = organization.getString('owner_id') === e.auth?.id
++      const membership = $app.findFirstRecordByFilter(
++        'organization_members',
++        'organization_id = {:organizationId} && user_id = {:userId} && status = "active"',
++        { organizationId, userId: e.auth.id },
++      )
++      const role = membership.getString('role')
++      hasOrganizationAccess =
++        organization.getString('status') === 'active' && (role === 'owner' || role === 'admin')
+     } catch (_) {}
+ 
+-    if (!hasOrganizationAccess) {
+-      try {
+-        const membership = $app.findFirstRecordByFilter(
+-          'organization_members',
+-          'organization_id = {:organizationId} && user_id = {:userId} && status = "active"',
+-          { organizationId: organizationId, userId: e.auth?.id || '' },
+-        )
+-        const role = membership.getString('role')
+-        hasOrganizationAccess = role === 'owner' || role === 'admin'
+-      } catch (_) {}
+-    }
+-
+     if (!hasOrganizationAccess) {
+       return e.forbiddenError('Access denied')
+     }
+diff --git a/pocketbase/hooks/integration_status.js b/pocketbase/hooks/integration_status.js
+index ec486be..cf73f4e 100644
+--- a/pocketbase/hooks/integration_status.js
++++ b/pocketbase/hooks/integration_status.js
+@@ -8,6 +8,8 @@ routerAdd(
+     const webhookSecretConfigured = Boolean($secrets.get('EVOLUTION_WEBHOOK_SECRET'))
+ 
+     let instanceStatus = 'missing'
++    let instanceId = ''
++    let instanceUserId = ''
+     let provider = null
+     try {
+       const membership = $app.findFirstRecordByFilter(
+@@ -15,11 +17,21 @@ routerAdd(
+         'user_id = {:userId} && status = "active"',
+         { userId: e.auth.id },
+       )
+-      const instance = $app.findFirstRecordByData(
++      const organizationId = membership.getString('organization_id')
++      const organization = $app.findRecordById('organizations', organizationId)
++      if (organization.getString('status') !== 'active') throw new Error('Inactive organization')
++      const instance = $app.findFirstRecordByFilter(
+         'whatsapp_instances',
+-        'organization_id',
+-        membership.getString('organization_id'),
++        'organization_id = {:organizationId} && user_id = {:userId}',
++        { organizationId, userId: e.auth.id },
+       )
++      if (
++        instance.getString('user_id') !== e.auth.id ||
++        instance.getString('organization_id') !== organizationId
++      )
++        throw new Error('Instance ownership mismatch')
++      instanceId = instance.id
++      instanceUserId = e.auth.id
+       instanceStatus = instance.getString('status') || 'pending'
+       const role = membership.getString('role')
+       if (role === 'owner' || role === 'admin') {
+@@ -28,42 +40,65 @@ routerAdd(
+         if (apiUrl && apiKey) {
+           provider = { reachable: false }
+           const response = $http.send({
+-            url: apiUrl + '/webhook/find/' + encodeURIComponent(instance.getString('instance_name')),
++            url:
++              apiUrl + '/webhook/find/' + encodeURIComponent(instance.getString('instance_name')),
+             method: 'GET',
+             headers: { apikey: apiKey },
+             timeout: 5,
+           })
+           if (response.statusCode === 200 && response.json) {
+             const config = response.json.webhook || response.json
+-            const expectedUrl = ($secrets.get('APP_WEBHOOK_URL') || '').replace(/\/$/, '') + '/backend/v1/webhook/evolution'
+-            const backendUrl = ($secrets.get('PB_INSTANCE_URL') || '').replace(/\/$/, '') + '/backend/v1/webhook/evolution'
++            const expectedUrl =
++              ($secrets.get('APP_WEBHOOK_URL') || '').replace(/\/$/, '') +
++              '/backend/v1/webhook/evolution'
++            const backendUrl =
++              ($secrets.get('PB_INSTANCE_URL') || '').replace(/\/$/, '') +
++              '/backend/v1/webhook/evolution'
+             provider = {
+               reachable: true,
+               webhookEnabled: config.enabled === true,
+               destinationMatches: config.url === expectedUrl,
+               backendDestinationMatches: config.url === backendUrl,
+               messageEventsEnabled: (config.events || []).indexOf('MESSAGES_UPSERT') !== -1,
+-              webhookSecretMatches: config.headers?.['X-Bitzaap-Webhook-Secret'] === $secrets.get('EVOLUTION_WEBHOOK_SECRET'),
++              webhookSecretMatches:
++                config.headers?.['X-Bitzaap-Webhook-Secret'] ===
++                $secrets.get('EVOLUTION_WEBHOOK_SECRET'),
+             }
+             const connection = $http.send({
+-              url: apiUrl + '/instance/connectionState/' + encodeURIComponent(instance.getString('instance_name')),
++              url:
++                apiUrl +
++                '/instance/connectionState/' +
++                encodeURIComponent(instance.getString('instance_name')),
+               method: 'GET',
+               headers: { apikey: apiKey },
+               timeout: 5,
+             })
+-            if (connection.statusCode === 200) provider.remoteState = connection.json?.instance?.state || 'unknown'
++            if (connection.statusCode === 200)
++              provider.remoteState = connection.json?.instance?.state || 'unknown'
+             const details = $http.send({
+-              url: apiUrl + '/instance/fetchInstances?instanceName=' + encodeURIComponent(instance.getString('instance_name')),
++              url:
++                apiUrl +
++                '/instance/fetchInstances?instanceName=' +
++                encodeURIComponent(instance.getString('instance_name')),
+               method: 'GET',
+               headers: { apikey: apiKey },
+               timeout: 5,
+             })
+             if (details.statusCode === 200 && Array.isArray(details.json)) {
+-              const paired = details.json.find((item) => item.name === instance.getString('instance_name'))
+-              provider.connectedNumberLast4 = String(paired?.ownerJid || '').split('@')[0].split(':')[0].replace(/\D/g, '').slice(-4)
++              const paired = details.json.find(
++                (item) => item.name === instance.getString('instance_name'),
++              )
++              provider.connectedNumberLast4 = String(paired?.ownerJid || '')
++                .split('@')[0]
++                .split(':')[0]
++                .replace(/\D/g, '')
++                .slice(-4)
+             }
+             const history = $http.send({
+-              url: apiUrl + '/chat/findMessages/' + encodeURIComponent(instance.getString('instance_name')),
++              url:
++                apiUrl +
++                '/chat/findMessages/' +
++                encodeURIComponent(instance.getString('instance_name')),
+               method: 'POST',
+               headers: { apikey: apiKey, 'Content-Type': 'application/json' },
+               body: JSON.stringify({ where: {}, page: 1, offset: 20 }),
+@@ -77,7 +112,9 @@ routerAdd(
+               provider.latestMessagePayloadType = typeof latest?.message
+               provider.testMessageFound = (messages.records || []).some((message) => {
+                 const payload = message.message?.ephemeralMessage?.message || message.message || {}
+-                const content = (payload.conversation || payload.extendedTextMessage?.text || '').trim().toLowerCase()
++                const content = (payload.conversation || payload.extendedTextMessage?.text || '')
++                  .trim()
++                  .toLowerCase()
+                 return content === 'teste 2' || content.indexOf('teste minha recepcionista') !== -1
+               })
+             }
+@@ -101,6 +138,8 @@ routerAdd(
+         secretConfigured: webhookSecretConfigured,
+       },
+       instance: {
++        id: instanceId,
++        userId: instanceUserId,
+         status: instanceStatus,
+       },
+       provider: provider,
+diff --git a/pocketbase/hooks/message_send.js b/pocketbase/hooks/message_send.js
+index 02e199b..d224b5a 100644
+--- a/pocketbase/hooks/message_send.js
++++ b/pocketbase/hooks/message_send.js
+@@ -22,25 +22,18 @@ routerAdd(
+     const organizationId = contact.getString('organization_id')
+     let hasOrganizationAccess = false
+     let membershipRole = ''
+-
+-    if (organizationId) {
+-      try {
+-        const organization = $app.findRecordById('organizations', organizationId)
+-        hasOrganizationAccess = organization.getString('owner_id') === e.auth?.id
+-      } catch (_) {}
+-
+-      if (!hasOrganizationAccess) {
+-        try {
+-          const membership = $app.findFirstRecordByFilter(
+-            'organization_members',
+-            'organization_id = {:organizationId} && user_id = {:userId} && status = "active"',
+-            { organizationId: organizationId, userId: e.auth?.id || '' },
+-          )
+-          membershipRole = membership.getString('role')
+-          hasOrganizationAccess = membershipRole !== 'viewer'
+-        } catch (_) {}
+-      }
+-    }
++    try {
++      const organization = $app.findRecordById('organizations', organizationId)
++      const membership = $app.findFirstRecordByFilter(
++        'organization_members',
++        'organization_id = {:organizationId} && user_id = {:userId} && status = "active"',
++        { organizationId, userId: e.auth?.id || '' },
++      )
++      membershipRole = membership.getString('role')
++      hasOrganizationAccess =
++        organization.getString('status') === 'active' &&
++        ['owner', 'admin', 'supervisor', 'agent'].indexOf(membershipRole) !== -1
++    } catch (_) {}
+ 
+     if (!hasOrganizationAccess) {
+       throw new ForbiddenError('Access denied')
+@@ -52,7 +45,10 @@ routerAdd(
+     } catch (_) {
+       throw new InternalServerError('Instance not found')
+     }
+-    if (instance.getString('organization_id') !== organizationId) {
++    if (
++      instance.getString('organization_id') !== organizationId ||
++      instance.getString('user_id') !== e.auth?.id
++    ) {
+       throw new ForbiddenError('Access denied')
+     }
+     const instanceName = instance.getString('instance_name')
+diff --git a/pocketbase/hooks/on_message_create_ai.js b/pocketbase/hooks/on_message_create_ai.js
+index dd08e50..ec5855c 100644
+--- a/pocketbase/hooks/on_message_create_ai.js
++++ b/pocketbase/hooks/on_message_create_ai.js
+@@ -12,6 +12,19 @@ onRecordAfterCreateSuccess(async (e) => {
+   }
+ 
+   const contact = $app.findRecordById('whatsapp_contacts', contactId)
++  const messageInstance = $app.findRecordById('whatsapp_instances', instanceId)
++  const sessionUserId = messageInstance.getString('user_id')
++  if (
++    contact.getString('instance_id') !== instanceId ||
++    contact.getString('organization_id') !== organizationId ||
++    messageInstance.getString('organization_id') !== organizationId ||
++    msg.getString('user_id') !== sessionUserId
++  ) {
++    $app
++      .logger()
++      .error('AI message rejected due to WhatsApp session mismatch', 'message_id', msg.id)
++    return e.next()
++  }
+   if (contact.getBool('agent_paused')) return e.next()
+ 
+   // 7-Second Message Debounce
+@@ -28,10 +41,11 @@ onRecordAfterCreateSuccess(async (e) => {
+   try {
+     const msgs = $app.findRecordsByFilter(
+       'whatsapp_messages',
+-      `contact_id='${contactId}' && direction='in'`,
++      'contact_id = {:contactId} && instance_id = {:instanceId} && organization_id = {:organizationId} && direction = "in"',
+       '-created',
+       1,
+       0,
++      { contactId, instanceId, organizationId },
+     )
+     if (msgs.length > 0) newestMsg = msgs[0]
+   } catch (err) {}
+@@ -45,10 +59,11 @@ onRecordAfterCreateSuccess(async (e) => {
+   try {
+     agents = $app.findRecordsByFilter(
+       'ai_agents',
+-      `organization_id='${organizationId}' && instance_id='${instanceId}' && active=true`,
++      'organization_id = {:organizationId} && instance_id = {:instanceId} && user_id = {:userId} && active = true',
+       '-created',
+       1,
+       0,
++      { organizationId, instanceId, userId: sessionUserId },
+     )
+   } catch (_) {
+     return e.next()
+@@ -74,10 +89,11 @@ onRecordAfterCreateSuccess(async (e) => {
+     try {
+       history = $app.findRecordsByFilter(
+         'whatsapp_messages',
+-        `contact_id='${contactId}'`,
++        'contact_id = {:contactId} && instance_id = {:instanceId} && organization_id = {:organizationId}',
+         '-created',
+         20,
+         0,
++        { contactId, instanceId, organizationId },
+       )
+     } catch (e) {}
+ 
+@@ -182,7 +198,7 @@ onRecordAfterCreateSuccess(async (e) => {
+       timeout: 30,
+     })
+ 
+-    const instance = $app.findRecordById('whatsapp_instances', agent.getString('instance_id'))
++    const instance = messageInstance
+     const instanceName = instance.getString('instance_name')
+ 
+     let reply = ''
+diff --git a/pocketbase/hooks/webhook_evolution.js b/pocketbase/hooks/webhook_evolution.js
+index dd246c5..9f62d6e 100644
+--- a/pocketbase/hooks/webhook_evolution.js
++++ b/pocketbase/hooks/webhook_evolution.js
+@@ -18,7 +18,12 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
+   const instanceName = body.instance
+   if (!instanceName) return e.json(200, { ok: true })
+ 
+-  console.info('Evolution webhook event', body.event || 'unknown', 'hasMessage', !!body.data?.message)
++  console.info(
++    'Evolution webhook event',
++    body.event || 'unknown',
++    'hasMessage',
++    !!body.data?.message,
++  )
+ 
+   try {
+     const instance = $app.findFirstRecordByData('whatsapp_instances', 'instance_name', instanceName)
+@@ -59,6 +64,7 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
+ 
+       const fromMe = body.data?.key?.fromMe
+       const messageId = body.data?.key?.id
++      if (!messageId) return e.json(200, { ok: true })
+       const pushName = body.data?.pushName || remoteJid.split('@')[0]
+ 
+       let type = 'text'
+@@ -153,11 +159,11 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
+       try {
+         const records = $app.findRecordsByFilter(
+           'whatsapp_contacts',
+-          `organization_id = {:organizationId} && remote_jid = {:jid}`,
++          'organization_id = {:organizationId} && instance_id = {:instanceId} && remote_jid = {:jid}',
+           '-created',
+           1,
+           0,
+-          { organizationId: organizationId, jid: remoteJid },
++          { organizationId, instanceId: instance.id, jid: remoteJid },
+         )
+         if (records.length > 0) {
+           contact = records[0]
+@@ -180,7 +186,11 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
+       $app.saveNoValidate(contact)
+ 
+       try {
+-        $app.findFirstRecordByData('whatsapp_messages', 'message_id', messageId)
++        $app.findFirstRecordByFilter(
++          'whatsapp_messages',
++          'organization_id = {:organizationId} && instance_id = {:instanceId} && message_id = {:messageId}',
++          { organizationId, instanceId: instance.id, messageId },
++        )
+       } catch (_) {
+         const msgsCol = $app.findCollectionByNameOrId('whatsapp_messages')
+         const msgRecord = new Record(msgsCol)
+diff --git a/pocketbase/migrations/0016_whatsapp_user_scope.js b/pocketbase/migrations/0016_whatsapp_user_scope.js
+new file mode 100644
+index 0000000..10212d8
+--- /dev/null
++++ b/pocketbase/migrations/0016_whatsapp_user_scope.js
+@@ -0,0 +1,178 @@
++migrate(
++  (app) => {
++    // O callback de migration recebe um app transacional. Nenhum registro operacional é alterado.
++    const instances = app.findCollectionByNameOrId('whatsapp_instances')
++    const contacts = app.findCollectionByNameOrId('whatsapp_contacts')
++    const messages = app.findCollectionByNameOrId('whatsapp_messages')
++    const agents = app.findCollectionByNameOrId('ai_agents')
++
++    const optionalCollection = (name) => {
++      try {
++        return app.findCollectionByNameOrId(name)
++      } catch (_) {
++        return null
++      }
++    }
++    const documents = optionalCollection('agent_documents')
++    const chunks = optionalCollection('agent_document_chunks')
++    if (chunks && !documents) {
++      throw new Error('Não é possível proteger os trechos sem a coleção de documentos.')
++    }
++
++    // Não escolher, renomear ou apagar uma sessão existente para resolver duplicidades.
++    const instanceOwners = new Map()
++    for (const instance of app.findAllRecords('whatsapp_instances')) {
++      const organizationId = instance.getString('organization_id')
++      const userId = instance.getString('user_id')
++      if (!organizationId || !userId) {
++        throw new Error('A instância ' + instance.id + ' precisa de organização e proprietário.')
++      }
++      const ownerKey = organizationId + ':' + userId
++      if (instanceOwners.has(ownerKey)) {
++        throw new Error(
++          'Há mais de uma instância para o mesmo usuário na organização: ' +
++            instanceOwners.get(ownerKey) +
++            ' e ' +
++            instance.id +
++            '. Revise as sessões antes de aplicar a migration.',
++        )
++      }
++      instanceOwners.set(ownerKey, instance.id)
++    }
++
++    // O mesmo alias correlaciona empresa, usuário, status e papel ao mesmo vínculo.
++    const member = '@collection.organization_members:whatsapp_member.'
++    const organizationAccess = (organizationField) =>
++      "@request.auth.id != '' && " +
++      organizationField +
++      ".status = 'active' && " +
++      member +
++      'organization_id ?= ' +
++      organizationField +
++      ' && ' +
++      member +
++      'user_id ?= @request.auth.id && ' +
++      member +
++      "status ?= 'active'"
++    const writeRole =
++      '(' +
++      member +
++      "role ?= 'owner' || " +
++      member +
++      "role ?= 'admin' || " +
++      member +
++      "role ?= 'supervisor' || " +
++      member +
++      "role ?= 'agent')"
++    const adminRole = '(' + member + "role ?= 'owner' || " + member + "role ?= 'admin')"
++    const immutableOwner =
++      '@request.body.organization_id:changed = false && @request.body.user_id:changed = false'
++    const immutableInstance = immutableOwner + ' && @request.body.instance_id:changed = false'
++
++    const hasIndexName = (statement, name) =>
++      new RegExp(
++        '\\bINDEX\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?["`\\[]?' + name + '["`\\]]?\\s',
++        'i',
++      ).test(statement)
++    const setIndex = (collection, name, statement) => {
++      collection.indexes = (collection.indexes || []).filter((index) => !hasIndexName(index, name))
++      collection.indexes.push(statement)
++    }
++
++    instances.listRule = organizationAccess('organization_id') + ' && user_id = @request.auth.id'
++    instances.viewRule = instances.listRule
++    instances.createRule = null
++    instances.updateRule = null
++    instances.deleteRule = null
++    setIndex(
++      instances,
++      'idx_whatsapp_instances_org_user',
++      'CREATE UNIQUE INDEX idx_whatsapp_instances_org_user ON whatsapp_instances (organization_id, user_id)',
++    )
++    app.save(instances)
++
++    const instanceReadAccess =
++      organizationAccess('organization_id') +
++      ' && instance_id.user_id = @request.auth.id && instance_id.organization_id = organization_id'
++    contacts.listRule = instanceReadAccess
++    contacts.viewRule = contacts.listRule
++    contacts.createRule = null
++    contacts.updateRule = instanceReadAccess + ' && ' + writeRole + ' && ' + immutableInstance
++    contacts.deleteRule = instanceReadAccess + ' && ' + adminRole
++    // Contatos legados duplicados são preservados; o webhook faz a busca por sessão e JID.
++    setIndex(
++      contacts,
++      'idx_whatsapp_contacts_instance_jid',
++      'CREATE INDEX idx_whatsapp_contacts_instance_jid ON whatsapp_contacts (instance_id, remote_jid)',
++    )
++    app.save(contacts)
++
++    // user_id da mensagem pode representar o atendente que enviou uma mensagem histórica.
++    // A sessão determina a propriedade, sem reatribuir mensagens anteriores.
++    messages.listRule =
++      instanceReadAccess +
++      ' && contact_id.instance_id = instance_id && contact_id.organization_id = organization_id'
++    messages.viewRule = messages.listRule
++    messages.createRule = null
++    messages.updateRule = null
++    messages.deleteRule = null
++    const mediaFile = messages.fields.getByName('media_file')
++    if (mediaFile) mediaFile.protected = true
++    setIndex(
++      messages,
++      'idx_whatsapp_messages_instance_message',
++      'CREATE UNIQUE INDEX idx_whatsapp_messages_instance_message ON whatsapp_messages (instance_id, message_id)',
++    )
++    // Criar a proteção composta antes de remover a unicidade global, dentro da mesma transação.
++    app.save(messages)
++    messages.indexes = (messages.indexes || []).filter((index) => !hasIndexName(index, 'idx_wm_id'))
++    app.save(messages)
++
++    const agentReadAccess = instanceReadAccess + ' && user_id = @request.auth.id'
++    agents.listRule = agentReadAccess
++    agents.viewRule = agentReadAccess
++    agents.createRule = agentReadAccess + ' && ' + writeRole
++    agents.updateRule = agentReadAccess + ' && ' + writeRole + ' && ' + immutableInstance
++    agents.deleteRule = agentReadAccess + ' && ' + adminRole
++    app.save(agents)
++
++    if (documents) {
++      const documentReadAccess =
++        organizationAccess('organization_id') +
++        ' && user_id = @request.auth.id && agent_id.user_id = @request.auth.id' +
++        ' && agent_id.instance_id.user_id = @request.auth.id' +
++        ' && agent_id.organization_id = organization_id' +
++        ' && agent_id.instance_id.organization_id = organization_id'
++      documents.listRule = documentReadAccess
++      documents.viewRule = documentReadAccess
++      documents.createRule = documentReadAccess + ' && ' + writeRole
++      documents.updateRule =
++        documentReadAccess +
++        ' && ' +
++        writeRole +
++        ' && ' +
++        immutableOwner +
++        ' && @request.body.agent_id:changed = false'
++      documents.deleteRule = documentReadAccess + ' && ' + adminRole
++      app.save(documents)
++    }
++
++    if (chunks) {
++      chunks.listRule =
++        organizationAccess('document_id.organization_id') +
++        ' && document_id.user_id = @request.auth.id' +
++        ' && document_id.agent_id.user_id = @request.auth.id' +
++        ' && document_id.agent_id.instance_id.user_id = @request.auth.id' +
++        ' && document_id.agent_id.organization_id = document_id.organization_id' +
++        ' && document_id.agent_id.instance_id.organization_id = document_id.organization_id'
++      chunks.viewRule = chunks.listRule
++      chunks.createRule = null
++      chunks.updateRule = null
++      chunks.deleteRule = null
++      app.save(chunks)
++    }
++  },
++  (_app) => {
++    // Rollback não destrutivo: não remove dados nem reabre acesso às sessões de outros usuários.
++  },
++)
+diff --git a/src/App.tsx b/src/App.tsx
+index 00904d0..3536006 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -476,7 +476,7 @@ function DashboardApp() {
+             {active === 'agents' && <AgentsView />}
+             {active === 'knowledge' && <KnowledgeView />}
+             {active === 'integrations' ? (
+-              <ConnectionSetup />
++              <ConnectionSetup organizationId={tenant.id} />
+             ) : (
+               !['dashboard', 'inbox', 'attention', 'agents', 'knowledge'].includes(active) && (
+                 <ModuleView id={active} />
+@@ -1096,7 +1096,7 @@ function AuthenticatedApp() {
+     )
+   }
+ 
+-  if (user) return <DashboardApp />
++  if (user) return <DashboardApp key={user.id} />
+ 
+   return (
+     <div className={loginDark ? 'dark' : ''}>
+diff --git a/src/hooks/use-auth.tsx b/src/hooks/use-auth.tsx
+index 2d17385..4c3c97b 100644
+--- a/src/hooks/use-auth.tsx
++++ b/src/hooks/use-auth.tsx
+@@ -38,8 +38,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
+ 
+   const signUp = async (email: string, password: string, passwordConfirm: string, name: string) => {
+     try {
+-      await pb.collection('users').create({ email, password, passwordConfirm, name })
+-      await pb.collection('users').authWithPassword(email, password)
++      const identity = email.trim().toLowerCase()
++      await pb.collection('users').create({ email: identity, password, passwordConfirm, name })
++      await pb.collection('users').authWithPassword(identity, password)
+       return { error: null }
+     } catch (error) {
+       return { error }
+@@ -48,7 +49,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
+ 
+   const signIn = async (email: string, password: string) => {
+     try {
+-      await pb.collection('users').authWithPassword(email, password)
++      await pb.collection('users').authWithPassword(email.trim().toLowerCase(), password)
+       return { error: null }
+     } catch (error) {
+       return { error }
+diff --git a/src/hooks/use-realtime.ts b/src/hooks/use-realtime.ts
+index 04ac0bb..0fe7045 100644
+--- a/src/hooks/use-realtime.ts
++++ b/src/hooks/use-realtime.ts
+@@ -17,6 +17,7 @@ export function useRealtime<TRecord extends RecordModel = RecordModel>(
+   collectionName: string,
+   callback: (data: RecordSubscription<TRecord>) => void,
+   enabled: boolean = true,
++  scopeKey: string = '',
+ ) {
+   const callbackRef = useRef(callback)
+   callbackRef.current = callback
+@@ -46,7 +47,7 @@ export function useRealtime<TRecord extends RecordModel = RecordModel>(
+         unsubscribeFn().catch(() => {})
+       }
+     }
+-  }, [collectionName, enabled])
++  }, [collectionName, enabled, scopeKey])
+ }
+ 
+ export default useRealtime
+diff --git a/src/pages/ConnectionSetup.tsx b/src/pages/ConnectionSetup.tsx
+index 189088e..aab5bbb 100644
+--- a/src/pages/ConnectionSetup.tsx
++++ b/src/pages/ConnectionSetup.tsx
+@@ -13,6 +13,7 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
+ import {
+   getInstances,
+   getIntegrationStatus,
++  ensureOwnInstance,
+   fetchInstanceQR,
+   logoutInstance,
+   type IntegrationStatus,
+@@ -23,49 +24,87 @@ import { useToast } from '@/hooks/use-toast'
+ import { RefreshCw, QrCode, PowerOff, Smartphone, CheckCircle2 } from 'lucide-react'
+ import { PageHeader } from '@/components/ui/page-header'
+ 
+-export default function ConnectionSetup() {
++export default function ConnectionSetup({ organizationId }: { organizationId: string }) {
+   const [instance, setInstance] = useState<any>(null)
+   const [loading, setLoading] = useState(true)
+   const [actionLoading, setActionLoading] = useState(false)
+   const [integration, setIntegration] = useState<IntegrationStatus | null>(null)
+   const [connectionError, setConnectionError] = useState('')
+-  const autoQrTriggered = useRef(false)
++  const autoQrTriggered = useRef('')
++  const loadVersion = useRef(0)
++  const mounted = useRef(false)
+   const { user } = useAuth()
+   const { toast } = useToast()
++  const userId = user?.id
++  const scopeKey = `${userId || ''}:${organizationId}`
++  const currentScope = useRef(scopeKey)
++  currentScope.current = scopeKey
+ 
+   const loadInstance = useCallback(async () => {
++    const version = ++loadVersion.current
+     try {
++      if (!userId) return
+       const [instances, integrationStatus] = await Promise.all([
+-        getInstances(),
++        getInstances(organizationId),
+         getIntegrationStatus(),
+       ])
++      if (!mounted.current || currentScope.current !== scopeKey || version !== loadVersion.current)
++        return
+       setIntegration(integrationStatus)
+-      if (instances.length > 0) {
+-        setInstance(instances[0])
++      setConnectionError('')
++      const ownInstance = instances.find(
++        (record) => record.user_id === userId && record.organization_id === organizationId,
++      )
++      if (ownInstance && integrationStatus.instance.id === ownInstance.id) {
++        const remoteState = integrationStatus.provider?.remoteState
++        const status =
++          remoteState === 'open'
++            ? 'connected'
++            : remoteState === 'connecting'
++              ? 'connecting'
++              : remoteState === 'close'
++                ? 'disconnected'
++                : ownInstance.status
++        setInstance({ ...ownInstance, status })
+       } else {
+-        setInstance(null)
++        setInstance(ownInstance || null)
+       }
+     } catch (e) {
++      if (!mounted.current || currentScope.current !== scopeKey || version !== loadVersion.current)
++        return
+       console.error('Failed to load instance:', e)
++      setInstance(null)
+       setIntegration(null)
+       setConnectionError(
+         'Não foi possível carregar a conexão. Clique em Atualizar para tentar novamente.',
+       )
+     } finally {
+-      setLoading(false)
++      if (mounted.current && currentScope.current === scopeKey && version === loadVersion.current)
++        setLoading(false)
+     }
+-  }, [])
++  }, [organizationId, scopeKey, userId])
+ 
+   useEffect(() => {
++    mounted.current = true
++    autoQrTriggered.current = ''
++    setInstance(null)
++    setIntegration(null)
++    setConnectionError('')
++    setLoading(true)
+     loadInstance()
++    return () => {
++      mounted.current = false
++    }
+   }, [loadInstance])
+ 
+   useRealtime(
+     'whatsapp_instances',
+-    () => {
++    (event) => {
++      if (event.record.user_id !== userId || event.record.organization_id !== organizationId) return
+       loadInstance()
+     },
+-    !!user,
++    !!userId,
++    scopeKey,
+   )
+ 
+   const handleRefresh = () => {
+@@ -75,11 +114,18 @@ export default function ConnectionSetup() {
+ 
+   const handleConnect = useCallback(
+     async (silent = false) => {
+-      if (!instance || !integration?.ready) return
++      if (
++        !instance ||
++        instance.user_id !== userId ||
++        instance.organization_id !== organizationId ||
++        !integration?.ready
++      )
++        return
+       setActionLoading(true)
+       setConnectionError('')
+       try {
+         const result = await fetchInstanceQR(instance.id)
++        if (!mounted.current || currentScope.current !== scopeKey) return
+         setInstance((current: any) =>
+           current?.id === instance.id
+             ? { ...current, status: result.status, qrcode: result.qrcode }
+@@ -94,6 +140,7 @@ export default function ConnectionSetup() {
+           })
+         }
+       } catch (e: any) {
++        if (!mounted.current || currentScope.current !== scopeKey) return
+         const message = e.response?.message || e.message || 'Não foi possível gerar o QR Code.'
+         setConnectionError(message)
+         toast({
+@@ -102,25 +149,61 @@ export default function ConnectionSetup() {
+           variant: 'destructive',
+         })
+       } finally {
+-        setActionLoading(false)
++        if (mounted.current && currentScope.current === scopeKey) setActionLoading(false)
+       }
+     },
+-    [instance, integration?.ready, toast],
++    [instance, integration?.ready, organizationId, scopeKey, toast, userId],
+   )
+ 
++  const handlePrepare = async () => {
++    if (!userId || !integration?.ready) return
++    setActionLoading(true)
++    setConnectionError('')
++    try {
++      const result = await ensureOwnInstance(organizationId)
++      if (!mounted.current || currentScope.current !== scopeKey) return
++      if (
++        result.instance?.user_id !== userId ||
++        result.instance?.organization_id !== organizationId
++      ) {
++        throw new Error('Não foi possível preparar a conexão da sua conta.')
++      }
++      const ownInstance = result.instance
++      autoQrTriggered.current = `${scopeKey}:${ownInstance.id}`
++      setInstance(ownInstance)
++      if (ownInstance.status !== 'connected') {
++        const qr = await fetchInstanceQR(ownInstance.id)
++        if (!mounted.current || currentScope.current !== scopeKey) return
++        setInstance((current: any) =>
++          current?.id === ownInstance.id
++            ? { ...current, status: qr.status, qrcode: qr.qrcode }
++            : current,
++        )
++      }
++    } catch (e: any) {
++      if (!mounted.current || currentScope.current !== scopeKey) return
++      setConnectionError(
++        e.response?.message || e.message || 'Não foi possível preparar seu WhatsApp.',
++      )
++    } finally {
++      if (mounted.current && currentScope.current === scopeKey) setActionLoading(false)
++    }
++  }
++
+   useEffect(() => {
+     if (
+       !loading &&
++      !actionLoading &&
+       integration?.ready &&
+       instance &&
+       instance.status !== 'connected' &&
+       !instance.qrcode &&
+-      !autoQrTriggered.current
++      autoQrTriggered.current !== `${scopeKey}:${instance.id}`
+     ) {
+-      autoQrTriggered.current = true
++      autoQrTriggered.current = `${scopeKey}:${instance.id}`
+       handleConnect(true)
+     }
+-  }, [loading, instance, integration?.ready, handleConnect])
++  }, [loading, actionLoading, instance, integration?.ready, handleConnect, scopeKey])
+ 
+   useEffect(() => {
+     if (!instance?.id || instance.status !== 'connecting') return
+@@ -137,18 +220,23 @@ export default function ConnectionSetup() {
+   }, [instance?.id, instance?.status, loadInstance])
+ 
+   const handleDisconnect = async () => {
++    if (!instance || instance.user_id !== userId || instance.organization_id !== organizationId)
++      return
+     setActionLoading(true)
+     try {
+       await logoutInstance()
++      if (!mounted.current || currentScope.current !== scopeKey) return
++      await loadInstance()
+       toast({ title: 'Desconectado com sucesso' })
+     } catch (e: any) {
++      if (!mounted.current || currentScope.current !== scopeKey) return
+       toast({
+         title: 'Erro ao desconectar instância',
+         description: e.message || 'Erro na Evolution API',
+         variant: 'destructive',
+       })
+     } finally {
+-      setActionLoading(false)
++      if (mounted.current && currentScope.current === scopeKey) setActionLoading(false)
+     }
+   }
+ 
+@@ -265,13 +353,19 @@ export default function ConnectionSetup() {
+                 </div>
+                 <div className="space-y-1.5">
+                   <AlertTitle className="text-base font-medium text-slate-900">
+-                    Nenhuma Instância Encontrada
++                    Conecte o seu WhatsApp
+                   </AlertTitle>
+                   <AlertDescription className="text-sm text-slate-500 leading-relaxed">
+-                    Você ainda não possui uma instância do WhatsApp associada à sua conta. Por
+-                    favor, entre em contato com o suporte ou administrador do sistema para
+-                    provisionar a sua instância dedicada.
++                    Sua conta ainda não possui um WhatsApp conectado. Prepare sua conexão e escaneie
++                    o QR Code com o seu celular. Cada usuário conecta o próprio aparelho.
+                   </AlertDescription>
++                  <Button
++                    onClick={handlePrepare}
++                    disabled={actionLoading || !integration?.ready}
++                    className="mt-4"
++                  >
++                    {actionLoading ? 'Preparando...' : 'Preparar meu WhatsApp'}
++                  </Button>
+                 </div>
+               </div>
+             </Alert>
+@@ -290,7 +384,7 @@ export default function ConnectionSetup() {
+                     </CardTitle>
+                   </div>
+                   <CardDescription className="text-xs text-slate-500">
+-                    Instância de comunicação
++                    WhatsApp deste usuário
+                   </CardDescription>
+                 </div>
+                 <div className="flex justify-end shrink-0">{getStatusBadge(instance.status)}</div>
+diff --git a/src/pages/Inbox.tsx b/src/pages/Inbox.tsx
+index 5e0365a..44a41c6 100644
+--- a/src/pages/Inbox.tsx
++++ b/src/pages/Inbox.tsx
+@@ -1,4 +1,4 @@
+-import { useEffect, useState, useRef } from 'react'
++import { useEffect, useState, useRef, useCallback } from 'react'
+ import pb from '@/lib/pocketbase/client'
+ import {
+   getContacts,
+@@ -7,8 +7,10 @@ import {
+   getInstances,
+   logoutInstance,
+   toggleContactAgent,
++  isRecordFromInstance,
+ } from '@/services/whatsapp'
+ import { useRealtime } from '@/hooks/use-realtime'
++import { useAuth } from '@/hooks/use-auth'
+ import { cn } from '@/lib/utils'
+ import { format } from 'date-fns'
+ import {
+@@ -61,6 +63,12 @@ type InboxProps = {
+ }
+ 
+ export default function Inbox({ organizationId, onConnectionSetup, initialContactId }: InboxProps) {
++  const { user } = useAuth()
++  const userId = user?.id
++  const scopeKey = `${userId || ''}:${organizationId}`
++  const currentScope = useRef(scopeKey)
++  const mounted = useRef(false)
++  currentScope.current = scopeKey
+   const [contacts, setContacts] = useState<any[]>([])
+   const [filteredContacts, setFilteredContacts] = useState<any[]>([])
+   const [search, setSearch] = useState('')
+@@ -70,6 +78,9 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
+   const [loadingContacts, setLoadingContacts] = useState(true)
+   const [loadingMessages, setLoadingMessages] = useState(false)
+   const [instance, setInstance] = useState<any>(null)
++  const instanceId = instance?.id
++  const currentInstanceId = useRef(instanceId)
++  currentInstanceId.current = instanceId
+ 
+   // File states
+   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+@@ -92,6 +103,32 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
+   const isFirstLoadRef = useRef(true)
+   const { toast } = useToast()
+ 
++  const cancelRecording = useCallback(() => {
++    const recorder = mediaRecorderRef.current
++    if (recorder && recorder.state !== 'inactive') {
++      recorder.onstop = null
++      recorder.stop()
++      recorder.stream.getTracks().forEach((track) => track.stop())
++    }
++    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current)
++    setIsRecording(false)
++    setAudioBlob(null)
++    setAudioPreviewUrl((url) => {
++      if (url) URL.revokeObjectURL(url)
++      return null
++    })
++    setRecordingTime(0)
++    audioChunksRef.current = []
++  }, [])
++
++  useEffect(() => {
++    mounted.current = true
++    return () => {
++      mounted.current = false
++      cancelRecording()
++    }
++  }, [cancelRecording])
++
+   const sortMessagesList = (msgs: any[]) => {
+     return [...msgs].sort((a, b) => {
+       const timeA = new Date(a.created || a.sent_at || 0).getTime()
+@@ -123,20 +160,13 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
+ 
+     const init = async () => {
+       try {
+-        const [insts, data] = await Promise.all([
+-          getInstances(organizationId),
+-          getContacts(organizationId),
+-        ])
+-        if (cancelled) return
+-
+-        setInstance(insts[0] || null)
+-        setContacts(data)
+-        setFilteredContacts(data)
+-
+-        if (initialContactId) {
+-          const contact = data.find((c) => c.id === initialContactId)
+-          if (contact) setSelectedContact(contact)
+-        }
++        if (!userId) return
++        const insts = await getInstances(organizationId)
++        if (cancelled || currentScope.current !== scopeKey) return
++        const ownInstance = insts.find(
++          (record) => record.user_id === userId && record.organization_id === organizationId,
++        )
++        setInstance(ownInstance || null)
+       } catch (e) {
+         if (cancelled) return
+         console.error(e)
+@@ -146,14 +176,50 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
+           description: 'Não foi possível carregar os dados da sua empresa. Tente novamente.',
+         })
+       } finally {
+-        if (!cancelled) setLoadingContacts(false)
++        if (!cancelled && currentScope.current === scopeKey) setLoadingContacts(false)
+       }
+     }
+     init()
+     return () => {
+       cancelled = true
+     }
+-  }, [organizationId, initialContactId, toast])
++  }, [organizationId, scopeKey, toast, userId])
++
++  useEffect(() => {
++    let cancelled = false
++    setContacts([])
++    setFilteredContacts([])
++    setSelectedContact(null)
++    setMessages([])
++    setText('')
++    clearFile()
++    cancelRecording()
++    if (!instanceId) {
++      setLoadingContacts(false)
++      return
++    }
++
++    setLoadingContacts(true)
++    getContacts(instanceId, organizationId)
++      .then((data) => {
++        if (cancelled || currentScope.current !== scopeKey) return
++        setContacts(data)
++        setFilteredContacts(data)
++        if (initialContactId) {
++          const contact = data.find((record) => record.id === initialContactId)
++          if (contact) setSelectedContact(contact)
++        }
++      })
++      .catch((error) => {
++        if (!cancelled && currentScope.current === scopeKey) console.error(error)
++      })
++      .finally(() => {
++        if (!cancelled && currentScope.current === scopeKey) setLoadingContacts(false)
++      })
++    return () => {
++      cancelled = true
++    }
++  }, [instanceId, organizationId, initialContactId, scopeKey, cancelRecording])
+ 
+   useEffect(() => {
+     let cancelled = false
+@@ -171,69 +237,103 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
+       cancelled = true
+       clearInterval(interval)
+     }
+-  }, [])
++  }, [userId])
+ 
+-  useRealtime('whatsapp_instances', async (event) => {
+-    if (event.record.organization_id !== organizationId) return
+-    try {
+-      const insts = await getInstances(organizationId)
+-      setInstance(insts[0] || null)
+-    } catch (e) {
+-      console.error('Failed to refresh WhatsApp instance', e)
+-    }
+-  })
+-
+-  useRealtime('whatsapp_contacts', (e) => {
+-    if (e.record.organization_id !== organizationId) return
+-    setContacts((prev) => {
+-      if (e.action === 'create') {
+-        if (prev.find((c) => c.id === e.record.id)) return prev
+-        return [e.record, ...prev]
+-      } else if (e.action === 'update') {
+-        return prev.map((c) => (c.id === e.record.id ? e.record : c))
+-      } else if (e.action === 'delete') {
+-        return prev.filter((c) => c.id !== e.record.id)
+-      }
+-      return prev
+-    })
+-    setSelectedContact((prev: any) => {
+-      if (prev && prev.id === e.record.id) {
+-        return e.action === 'delete' ? null : { ...prev, ...e.record }
++  useRealtime(
++    'whatsapp_instances',
++    async (event) => {
++      if (event.record.user_id !== userId || event.record.organization_id !== organizationId) return
++      try {
++        const insts = await getInstances(organizationId)
++        if (currentScope.current !== scopeKey) return
++        setInstance(
++          insts.find(
++            (record) => record.user_id === userId && record.organization_id === organizationId,
++          ) || null,
++        )
++      } catch (e) {
++        console.error('Failed to refresh WhatsApp instance', e)
+       }
+-      return prev
+-    })
+-  })
++    },
++    !!userId,
++    scopeKey,
++  )
++
++  useRealtime(
++    'whatsapp_contacts',
++    (e) => {
++      if (!isRecordFromInstance(e.record, instanceId, organizationId)) return
++      setContacts((prev) => {
++        if (e.action === 'create') {
++          if (prev.find((c) => c.id === e.record.id)) return prev
++          return [e.record, ...prev]
++        } else if (e.action === 'update') {
++          return prev.map((c) => (c.id === e.record.id ? e.record : c))
++        } else if (e.action === 'delete') {
++          return prev.filter((c) => c.id !== e.record.id)
++        }
++        return prev
++      })
++      setSelectedContact((prev: any) => {
++        if (prev && prev.id === e.record.id) {
++          return e.action === 'delete' ? null : { ...prev, ...e.record }
++        }
++        return prev
++      })
++    },
++    !!instanceId,
++    `${scopeKey}:${instanceId || ''}`,
++  )
+ 
+   const selectedContactId = selectedContact?.id
+ 
+-  useRealtime('whatsapp_messages', (e) => {
+-    if (e.record.organization_id !== organizationId) return
+-    if (selectedContactId && e.record.contact_id === selectedContactId) {
+-      if (e.action === 'create') {
+-        setMessages((prev) => {
+-          if (prev.find((m) => m.id === e.record.id)) return prev
+-          return sortMessagesList([...prev, e.record])
+-        })
+-      } else if (e.action === 'update') {
+-        setMessages((prev) =>
+-          sortMessagesList(prev.map((m) => (m.id === e.record.id ? e.record : m))),
+-        )
+-      } else if (e.action === 'delete') {
+-        setMessages((prev) => prev.filter((m) => m.id !== e.record.id))
++  useRealtime(
++    'whatsapp_messages',
++    (e) => {
++      if (!isRecordFromInstance(e.record, instanceId, organizationId)) return
++      if (selectedContactId && e.record.contact_id === selectedContactId) {
++        if (e.action === 'create') {
++          setMessages((prev) => {
++            if (prev.find((m) => m.id === e.record.id)) return prev
++            return sortMessagesList([...prev, e.record])
++          })
++        } else if (e.action === 'update') {
++          setMessages((prev) =>
++            sortMessagesList(prev.map((m) => (m.id === e.record.id ? e.record : m))),
++          )
++        } else if (e.action === 'delete') {
++          setMessages((prev) => prev.filter((m) => m.id !== e.record.id))
++        }
+       }
+-    }
+-  })
++    },
++    !!instanceId,
++    `${scopeKey}:${instanceId || ''}`,
++  )
+ 
+   useEffect(() => {
+-    if (selectedContactId) {
+-      setMessages([])
+-      isFirstLoadRef.current = true
+-      loadMessages(selectedContactId)
+-      clearFile()
+-    } else {
+-      setMessages([])
++    let cancelled = false
++    setMessages([])
++    clearFile()
++    if (!selectedContactId || !instanceId) {
++      setLoadingMessages(false)
++      return
+     }
+-  }, [selectedContactId])
++    setLoadingMessages(true)
++    isFirstLoadRef.current = true
++    getMessages(selectedContactId, instanceId)
++      .then((data) => {
++        if (!cancelled && currentScope.current === scopeKey) setMessages(sortMessagesList(data))
++      })
++      .catch((error) => {
++        if (!cancelled && currentScope.current === scopeKey) console.error(error)
++      })
++      .finally(() => {
++        if (!cancelled && currentScope.current === scopeKey) setLoadingMessages(false)
++      })
++    return () => {
++      cancelled = true
++    }
++  }, [selectedContactId, instanceId, scopeKey])
+ 
+   useEffect(() => {
+     if (scrollRef.current) {
+@@ -257,8 +357,13 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
+   }, [search, contacts])
+ 
+   const startRecording = async () => {
++    const recordingScope = scopeKey
+     try {
+       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
++      if (!mounted.current || currentScope.current !== recordingScope) {
++        stream.getTracks().forEach((track) => track.stop())
++        return
++      }
+       const mediaRecorder = new MediaRecorder(stream)
+       mediaRecorderRef.current = mediaRecorder
+       audioChunksRef.current = []
+@@ -305,19 +410,6 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
+     }
+   }
+ 
+-  const cancelRecording = () => {
+-    if (isRecording) {
+-      stopRecording()
+-    }
+-    setAudioBlob(null)
+-    if (audioPreviewUrl) {
+-      URL.revokeObjectURL(audioPreviewUrl)
+-      setAudioPreviewUrl(null)
+-    }
+-    setRecordingTime(0)
+-    audioChunksRef.current = []
+-  }
+-
+   const formatTime = (seconds: number) => {
+     const m = Math.floor(seconds / 60)
+       .toString()
+@@ -326,21 +418,16 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
+     return `${m}:${s}`
+   }
+ 
+-  const loadMessages = async (contactId: string) => {
+-    setLoadingMessages(true)
+-    try {
+-      const msgs = await getMessages(contactId)
+-      setMessages(sortMessagesList(msgs))
+-    } catch (e) {
+-      console.error(e)
+-    } finally {
+-      setLoadingMessages(false)
+-    }
+-  }
+-
+   const handleSend = async (e?: React.FormEvent) => {
+     if (e) e.preventDefault()
+     if ((!text.trim() && !selectedFile && !audioBlob) || !selectedContact) return
++    if (
++      instance?.status !== 'connected' ||
++      !isRecordFromInstance(selectedContact, instanceId, organizationId)
++    )
++      return
++    const sendingScope = scopeKey
++    const sendingInstanceId = instanceId
+ 
+     let sendType = selectedFile ? fileType : 'text'
+     let fileToSend: File | undefined = selectedFile || undefined
+@@ -416,6 +503,13 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
+         })
+       }
+ 
++      if (
++        !mounted.current ||
++        pb.authStore.record?.id !== userId ||
++        currentScope.current !== sendingScope ||
++        currentInstanceId.current !== sendingInstanceId
++      )
++        return
+       const res = await sendMessage(selectedContact.id, {
+         text: textToSend,
+         file: fileToSend,
+@@ -424,6 +518,12 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
+         instance_id: selectedContact.instance_id,
+         remote_jid: selectedContact.remote_jid,
+       })
++      if (
++        !mounted.current ||
++        currentScope.current !== sendingScope ||
++        currentInstanceId.current !== sendingInstanceId
++      )
++        return
+ 
+       const createdMsg = res?.message || res
+       if (createdMsg && createdMsg.id) {
+@@ -439,6 +539,7 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
+         )
+       }
+     } catch (error) {
++      if (!mounted.current || currentScope.current !== sendingScope) return
+       console.error(error)
+       setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m)))
+     }
+@@ -452,7 +553,8 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
+   }
+ 
+   const handleToggleAgent = async () => {
+-    if (!selectedContact) return
++    if (!selectedContact || !isRecordFromInstance(selectedContact, instanceId, organizationId))
++      return
+     const newStatus = !selectedContact.agent_paused
+     try {
+       setSelectedContact((prev: any) => ({ ...prev, agent_paused: newStatus }))
+@@ -460,10 +562,12 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
+         prev.map((c) => (c.id === selectedContact.id ? { ...c, agent_paused: newStatus } : c)),
+       )
+       await toggleContactAgent(selectedContact.id, newStatus)
++      if (!mounted.current || currentScope.current !== scopeKey) return
+       toast({
+         title: newStatus ? 'IA pausada para este contato' : 'IA reativada para este contato',
+       })
+-    } catch (err) {
++    } catch (_err) {
++      if (!mounted.current || currentScope.current !== scopeKey) return
+       setSelectedContact((prev: any) => ({ ...prev, agent_paused: !newStatus }))
+       setContacts((prev) =>
+         prev.map((c) => (c.id === selectedContact.id ? { ...c, agent_paused: !newStatus } : c)),
+@@ -473,10 +577,14 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
+   }
+ 
+   const handleDisconnect = async () => {
++    if (!instance || instance.user_id !== userId || instance.organization_id !== organizationId)
++      return
+     try {
+       await logoutInstance()
++      if (!mounted.current || currentScope.current !== scopeKey) return
+       toast({ title: 'WhatsApp desconectado com sucesso' })
+-    } catch (e) {
++    } catch (_e) {
++      if (!mounted.current || currentScope.current !== scopeKey) return
+       toast({ variant: 'destructive', title: 'Erro ao desconectar WhatsApp' })
+     }
+   }
+diff --git a/src/pages/Pipeline.tsx b/src/pages/Pipeline.tsx
+index 0c9b736..9e30412 100644
+--- a/src/pages/Pipeline.tsx
++++ b/src/pages/Pipeline.tsx
+@@ -1,11 +1,10 @@
+-import { useEffect, useState } from 'react'
++import { useEffect, useState, useRef, useCallback } from 'react'
+ import { ScrollArea } from '@/components/ui/scroll-area'
+ import { getContacts } from '@/services/contacts'
+ import { useRealtime } from '@/hooks/use-realtime'
+ import { formatDistanceToNow, parseISO } from 'date-fns'
+ import { ptBR } from 'date-fns/locale'
+ import { Loader2, MessageSquare } from 'lucide-react'
+-import { cn } from '@/lib/utils'
+ import { useAuth } from '@/hooks/use-auth'
+ import { useNavigate } from 'react-router-dom'
+ import { Button } from '@/components/ui/button'
+@@ -16,22 +15,29 @@ export default function Pipeline() {
+   const navigate = useNavigate()
+   const [contacts, setContacts] = useState<any[]>([])
+   const [loading, setLoading] = useState(true)
++  const currentUserId = useRef(user?.id)
++  currentUserId.current = user?.id
+ 
+-  const loadData = async () => {
+-    if (!user) return
++  const userId = user?.id
++  const loadData = useCallback(async () => {
++    if (!userId) return
++    const requestedUserId = userId
+     try {
+-      const data = await getContacts(user.id)
++      const data = await getContacts()
++      if (currentUserId.current !== requestedUserId) return
+       setContacts(data)
+     } catch (e) {
+       console.error(e)
+     } finally {
+-      setLoading(false)
++      if (currentUserId.current === requestedUserId) setLoading(false)
+     }
+-  }
++  }, [userId])
+ 
+   useEffect(() => {
++    setContacts([])
++    setLoading(true)
+     loadData()
+-  }, [user])
++  }, [loadData])
+ 
+   useRealtime(
+     'whatsapp_contacts',
+@@ -39,6 +45,7 @@ export default function Pipeline() {
+       loadData()
+     },
+     !!user,
++    user?.id || '',
+   )
+ 
+   if (loading) {
+diff --git a/src/services/contacts.ts b/src/services/contacts.ts
+index c2f58f3..dc39194 100644
+--- a/src/services/contacts.ts
++++ b/src/services/contacts.ts
+@@ -1,6 +1,7 @@
+-import pb from '@/lib/pocketbase/client'
++import { getContacts as getInstanceContacts, getInstances } from '@/services/whatsapp'
+ 
+-export const getContacts = () =>
+-  pb.collection('whatsapp_contacts').getFullList({
+-    sort: '-updated',
+-  })
++export const getContacts = async () => {
++  const instances = await getInstances()
++  const instance = instances[0]
++  return instance ? getInstanceContacts(instance.id, instance.organization_id) : []
++}
+diff --git a/src/services/whatsapp.ts b/src/services/whatsapp.ts
+index 40f3f2a..5fc6d0c 100644
+--- a/src/services/whatsapp.ts
++++ b/src/services/whatsapp.ts
+@@ -11,25 +11,58 @@ export type IntegrationStatus = {
+     secretConfigured: boolean
+   }
+   instance: {
++    id?: string
++    userId?: string
+     status: string
+   }
++  provider?: {
++    remoteState?: string
++  }
++}
++
++const requireUserId = () => {
++  const userId = pb.authStore.record?.id
++  if (!userId) throw new Error('Entre na sua conta para acessar o WhatsApp.')
++  return userId
+ }
+ 
+-export const getInstances = (organizationId?: string) =>
+-  pb.collection('whatsapp_instances').getFullList({
++export const getInstances = (organizationId?: string) => {
++  const userId = requireUserId()
++  return pb.collection('whatsapp_instances').getFullList({
+     sort: '-created',
+-    filter: organizationId
+-      ? pb.filter('organization_id = {:organizationId}', { organizationId })
+-      : '',
++    filter: pb.filter(
++      'user_id = {:userId}' + (organizationId ? ' && organization_id = {:organizationId}' : ''),
++      { userId, organizationId },
++    ),
+   })
++}
+ 
+-export const getContacts = (organizationId?: string) =>
+-  pb.collection('whatsapp_contacts').getFullList({
++export const getContacts = (instanceId: string, organizationId?: string) => {
++  const userId = requireUserId()
++  if (!instanceId) throw new Error('Selecione a conexão do seu WhatsApp.')
++  return pb.collection('whatsapp_contacts').getFullList({
+     sort: '-last_message_at',
+-    filter: organizationId
+-      ? pb.filter('organization_id = {:organizationId}', { organizationId })
+-      : '',
++    filter: pb.filter(
++      'instance_id = {:instanceId} && instance_id.user_id = {:userId}' +
++        (organizationId ? ' && organization_id = {:organizationId}' : ''),
++      { instanceId, userId, organizationId },
++    ),
++  })
++}
++
++export const isRecordFromInstance = (
++  record: { instance_id?: string; organization_id?: string },
++  instanceId: string | undefined,
++  organizationId: string,
++) => !!instanceId && record.instance_id === instanceId && record.organization_id === organizationId
++
++export const ensureOwnInstance = (organizationId: string) => {
++  requireUserId()
++  return pb.send<{ instance: any; created: boolean }>('/backend/v1/instance/ensure', {
++    method: 'POST',
++    body: { organization_id: organizationId },
+   })
++}
+ 
+ export const getIntegrationStatus = () =>
+   pb.send<IntegrationStatus>('/backend/v1/integration/status', { method: 'GET' })
+@@ -37,10 +70,17 @@ export const getIntegrationStatus = () =>
+ export const toggleContactAgent = (contactId: string, paused: boolean) =>
+   pb.collection('whatsapp_contacts').update(contactId, { agent_paused: paused })
+ 
+-export const getMessages = (contactId: string) =>
+-  pb
+-    .collection('whatsapp_messages')
+-    .getFullList({ filter: `contact_id = '${contactId}'`, sort: 'sent_at' })
++export const getMessages = (contactId: string, instanceId: string) => {
++  const userId = requireUserId()
++  if (!contactId || !instanceId) throw new Error('Selecione uma conversa do seu WhatsApp.')
++  return pb.collection('whatsapp_messages').getFullList({
++    filter: pb.filter(
++      'contact_id = {:contactId} && instance_id = {:instanceId} && instance_id.user_id = {:userId}',
++      { contactId, instanceId, userId },
++    ),
++    sort: 'sent_at',
++  })
++}
+ 
+ export const fetchInstanceQR = (instanceId: string) =>
+   pb.send<{ status: string; qrcode: string; pending?: boolean }>(
+diff --git a/tests/ai-whatsapp-user-scope.test.mjs b/tests/ai-whatsapp-user-scope.test.mjs
+new file mode 100644
+index 0000000..591edbd
+--- /dev/null
++++ b/tests/ai-whatsapp-user-scope.test.mjs
+@@ -0,0 +1,114 @@
++import assert from 'node:assert/strict'
++import { readFile } from 'node:fs/promises'
++import test from 'node:test'
++import vm from 'node:vm'
++
++const source = await readFile(new URL('../pocketbase/hooks/on_message_create_ai.js', import.meta.url), 'utf8')
++
++function record(values) {
++  return {
++    id: values.id,
++    values,
++    getString: (field) => String(values[field] ?? ''),
++    getBool: (field) => values[field] === true,
++    set: (field, value) => { values[field] = value },
++  }
++}
++
++function matches(row, filter, params = {}) {
++  for (const match of filter.matchAll(/\b([a-z_]+)\s*=\s*\{:(\w+)\}/g)) {
++    if (row.getString(match[1]) !== String(params[match[2]] ?? '')) return false
++  }
++  for (const match of filter.matchAll(/\b([a-z_]+)\s*=\s*["']([^"']*)["']/g)) {
++    if (row.getString(match[1]) !== match[2]) return false
++  }
++  return true
++}
++
++async function execute({ contactInstance = 'richard-instance', contactOrganization = 'company-1', messageUser = 'richard' } = {}) {
++  const current = record({
++    id: 'incoming-richard', direction: 'in', user_id: messageUser,
++    organization_id: 'company-1', instance_id: 'richard-instance',
++    contact_id: 'richard-contact', body: 'Pergunta de Richard',
++  })
++  const contact = record({ id: 'richard-contact', user_id: 'richard', organization_id: contactOrganization, instance_id: contactInstance, remote_jid: '5511999999999@s.whatsapp.net', agent_paused: false })
++  const session = record({ id: 'richard-instance', user_id: 'richard', organization_id: 'company-1', instance_name: 'session-richard' })
++  // Um agente associado indevidamente à mesma sessão e uma mensagem histórica
++  // da sessão de Leandro aparecem antes dos registros legítimos de propósito.
++  const agents = [
++    record({ id: 'foreign-agent', organization_id: 'company-1', instance_id: session.id, user_id: 'leandro', active: true, provider: 'openai', api_key: 'foreign-fixture-key', system_prompt: 'Fonte de outro login' }),
++    record({ id: 'own-agent', organization_id: 'company-1', instance_id: session.id, user_id: 'richard', active: true, provider: 'openai', api_key: 'own-fixture-key', system_prompt: 'Atenda Richard' }),
++  ]
++  const messages = [
++    record({ id: 'foreign-message', direction: 'in', user_id: 'leandro', organization_id: 'company-1', instance_id: 'leandro-instance', contact_id: current.getString('contact_id'), body: 'Histórico privado de outro login' }),
++    current,
++  ]
++  const calls = []
++  const queries = []
++  const saves = []
++  let nextCount = 0
++  let handler
++  vm.runInNewContext(source, {
++    onRecordAfterCreateSuccess(fn) { handler = fn },
++    Record: class { constructor() { return record({ id: 'new-ai-message' }) } },
++    $security: { randomString: () => 'fixture-id' },
++    $secrets: { get: (name) => ({ EVOLUTION_API_URL: 'https://evolution.example.test', EVOLUTION_API_KEY: 'evolution-fixture-key' })[name] },
++    $app: {
++      findRecordById(collection, id) {
++        if (collection === 'whatsapp_contacts' && id === contact.id) return contact
++        if (collection === 'whatsapp_instances' && id === session.id) return session
++        throw new Error('Record not found')
++      },
++      findRecordsByFilter(collection, filter, _sort, limit, offset, params) {
++        queries.push({ collection, filter, params })
++        return (collection === 'ai_agents' ? agents : messages).filter((row) => matches(row, filter, params)).slice(offset, offset + limit)
++      },
++      findCollectionByNameOrId: (name) => ({ name }),
++      saveNoValidate(row) { saves.push({ ...row.values }) },
++      logger: () => ({ error() {} }),
++    },
++    $http: {
++      send(request) {
++        const call = JSON.parse(JSON.stringify(request))
++        calls.push(call)
++        if (call.url === 'https://httpbin.org/delay/7') return { statusCode: 200 }
++        if (call.url === 'https://api.openai.com/v1/chat/completions') return { statusCode: 200, json: { choices: [{ message: { content: 'Resposta isolada' } }] } }
++        if (call.url === 'https://evolution.example.test/message/sendText/session-richard') return { statusCode: 201, json: { key: { id: 'ai-provider-id' } } }
++        throw new Error('Chamada externa inesperada')
++      },
++    },
++  })
++  await handler({ record: current, next: () => { nextCount++ } })
++  return { calls, queries, saves, nextCount }
++}
++
++for (const [description, fixture] of [
++  ['contato associado à sessão de outro login', { contactInstance: 'leandro-instance' }],
++  ['contato de outra organização', { contactOrganization: 'company-2' }],
++  ['mensagem com autor incompatível com o dono da sessão', { messageUser: 'leandro' }],
++]) {
++  test(`IA rejeita ${description} antes de qualquer consulta externa ou gravação`, async () => {
++    const result = await execute(fixture)
++
++    assert.equal(result.calls.length, 0)
++    assert.equal(result.queries.length, 0)
++    assert.equal(result.saves.length, 0)
++    assert.equal(result.nextCount, 1)
++  })
++}
++
++test('IA usa somente o agente, histórico e instância do login que recebeu a mensagem', async () => {
++  const result = await execute()
++  const completion = result.calls.find((call) => call.url === 'https://api.openai.com/v1/chat/completions')
++  assert.ok(completion)
++  assert.equal(completion.headers.Authorization, 'Bearer own-fixture-key')
++  assert.doesNotMatch(completion.body, /Histórico privado de outro login|Fonte de outro login/)
++  assert.match(completion.body, /Pergunta de Richard/)
++  const send = result.calls.find((call) => call.url.includes('/message/sendText/'))
++  assert.equal(send.url, 'https://evolution.example.test/message/sendText/session-richard')
++  assert.equal(result.calls.filter((call) => call.url.includes('/message/sendText/')).length, 1)
++  const response = result.saves.find((row) => row.message_id === 'ai-provider-id')
++  assert.equal(response.instance_id, 'richard-instance')
++  assert.equal(response.organization_id, 'company-1')
++  assert.equal(response.contact_id, 'richard-contact')
++})
+diff --git a/tests/frontend-user-scope.test.mjs b/tests/frontend-user-scope.test.mjs
+new file mode 100644
+index 0000000..59ee98f
+--- /dev/null
++++ b/tests/frontend-user-scope.test.mjs
+@@ -0,0 +1,165 @@
++import assert from 'node:assert/strict'
++import fs from 'node:fs'
++import path from 'node:path'
++import test from 'node:test'
++import vm from 'node:vm'
++import ts from 'typescript'
++
++const root = path.resolve(import.meta.dirname, '..')
++
++const loadModule = (file, modules) => {
++  const source = fs.readFileSync(path.join(root, file), 'utf8')
++  const compiled = ts.transpileModule(source, {
++    fileName: file,
++    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
++  }).outputText
++  const exports = {}
++  vm.runInNewContext(compiled, {
++    exports,
++    require: (name) => {
++      if (!(name in modules)) throw new Error(`Importação não simulada: ${name}`)
++      return modules[name]
++    },
++  })
++  return exports
++}
++
++const fixture = () => {
++  const calls = []
++  const pb = {
++    authStore: { record: { id: 'richard' } },
++    filter: (expression, parameters) => JSON.stringify({ expression, parameters }),
++    collection: (name) => ({
++      getFullList: async (options) => {
++        calls.push({ collection: name, ...JSON.parse(options.filter), sort: options.sort })
++        return []
++      },
++    }),
++    send: async (url, options) => {
++      calls.push({ url, ...options })
++      return { instance: { id: 'instance-richard' }, created: true }
++    },
++  }
++  const service = loadModule('src/services/whatsapp.ts', {
++    '@/lib/pocketbase/client': { __esModule: true, default: pb },
++  })
++  return { pb, service, calls }
++}
++
++test('a listagem de sessões sempre exige o login, mesmo sem organização informada', async () => {
++  const { service, calls, pb } = fixture()
++  await service.getInstances('bit-consulting')
++  assert.match(calls[0].expression, /user_id = \{:userId\}/)
++  assert.equal(calls[0].parameters.userId, 'richard')
++  assert.equal(calls[0].parameters.organizationId, 'bit-consulting')
++
++  pb.authStore.record = { id: 'leandro' }
++  await service.getInstances()
++  assert.match(calls[1].expression, /user_id = \{:userId\}/)
++  assert.equal(calls[1].parameters.userId, 'leandro')
++})
++
++test('sem usuário autenticado não é feita consulta ampla de WhatsApp', () => {
++  const { service, calls, pb } = fixture()
++  pb.authStore.record = null
++  assert.throws(() => service.getInstances('bit-consulting'), /Entre na sua conta/)
++  assert.throws(() => service.getContacts('instance-richard'), /Entre na sua conta/)
++  assert.throws(() => service.getMessages('contact-richard', 'instance-richard'), /Entre na sua conta/)
++  assert.equal(calls.length, 0)
++})
++
++test('contatos e mensagens ficam na instância própria sem filtrar pelo autor histórico', async () => {
++  const { service, calls } = fixture()
++  await service.getContacts('instance-richard', 'bit-consulting')
++  await service.getMessages('contact-richard', 'instance-richard')
++  for (const call of calls) {
++    assert.match(call.expression, /instance_id = \{:instanceId\}/)
++    assert.match(call.expression, /instance_id\.user_id = \{:userId\}/)
++    assert.doesNotMatch(call.expression, /(?:^|&&\s*)user_id\s*=/)
++    assert.equal(call.parameters.instanceId, 'instance-richard')
++    assert.equal(call.parameters.userId, 'richard')
++  }
++  assert.equal(calls[1].parameters.contactId, 'contact-richard')
++})
++
++test('contato ou instância ausente não dispara consulta sem escopo', () => {
++  const { service, calls } = fixture()
++  assert.throws(() => service.getContacts(''), /Selecione a conexão/)
++  assert.throws(() => service.getMessages('contact-richard', ''), /Selecione uma conversa/)
++  assert.equal(calls.length, 0)
++})
++
++test('eventos da mesma empresa mas de outro WhatsApp são descartados', () => {
++  const { service } = fixture()
++  assert.equal(
++    service.isRecordFromInstance(
++      { instance_id: 'instance-leandro', organization_id: 'bit-consulting' },
++      'instance-richard',
++      'bit-consulting',
++    ),
++    false,
++  )
++  assert.equal(
++    service.isRecordFromInstance(
++      { instance_id: 'instance-richard', organization_id: 'outra-empresa' },
++      'instance-richard',
++      'bit-consulting',
++    ),
++    false,
++  )
++  assert.equal(
++    service.isRecordFromInstance(
++      { instance_id: 'instance-richard', organization_id: 'bit-consulting', user_id: 'autor-historico' },
++      'instance-richard',
++      'bit-consulting',
++    ),
++    true,
++  )
++})
++
++test('preparação explícita envia somente a empresa, deixando o dono a cargo do backend', async () => {
++  const { service, calls } = fixture()
++  await service.ensureOwnInstance('bit-consulting')
++  assert.equal(calls[0].url, '/backend/v1/instance/ensure')
++  assert.equal(calls[0].method, 'POST')
++  assert.equal(calls[0].body.organization_id, 'bit-consulting')
++  assert.equal(calls[0].body.user_id, undefined)
++})
++
++const authFixture = () => {
++  const calls = []
++  const pb = {
++    authStore: { record: null },
++    collection: (collection) => ({
++      create: async (data) => calls.push({ action: 'create', collection, data }),
++      authWithPassword: async (email, password) => calls.push({ action: 'login', collection, email, password }),
++    }),
++  }
++  const auth = loadModule('src/hooks/use-auth.tsx', {
++    '@/lib/pocketbase/client': { __esModule: true, default: pb },
++    react: {
++      createContext: () => ({ Provider: 'provider' }),
++      useState: (value) => [value, () => {}],
++      useEffect: () => {},
++    },
++    'react/jsx-runtime': { jsx: (_type, props) => props },
++  })
++  return { context: auth.AuthProvider({ children: null }).value, calls }
++}
++
++test('login aceita maiúsculas e espaços no e-mail sem transformar a senha', async () => {
++  const { context, calls } = authFixture()
++  const password = ' Senha-de-teste! '
++  const result = await context.signIn('  Richard.Duarte.Silva@GMAIL.com  ', password)
++  assert.equal(result.error, null)
++  assert.equal(calls[0].email, 'richard.duarte.silva@gmail.com')
++  assert.equal(calls[0].password, password)
++})
++
++test('cadastro e primeiro login usam a mesma identidade normalizada', async () => {
++  const { context, calls } = authFixture()
++  await context.signUp('  Richard.Duarte.Silva@GMAIL.com  ', 'Senha-de-teste!', 'Senha-de-teste!', 'Richard')
++  assert.equal(calls[0].data.email, 'richard.duarte.silva@gmail.com')
++  assert.equal(calls[1].email, calls[0].data.email)
++  assert.equal(calls[0].data.passwordConfirm, 'Senha-de-teste!')
++})
+diff --git a/tests/instance-ensure.test.mjs b/tests/instance-ensure.test.mjs
+new file mode 100644
+index 0000000..9327f29
+--- /dev/null
++++ b/tests/instance-ensure.test.mjs
+@@ -0,0 +1,162 @@
++import assert from 'node:assert/strict'
++import { readFile } from 'node:fs/promises'
++import test from 'node:test'
++import vm from 'node:vm'
++
++const source = await readFile(new URL('../pocketbase/hooks/instance_ensure.js', import.meta.url), 'utf8')
++
++function record(values) {
++  return {
++    id: values.id,
++    values,
++    getString: (field) => String(values[field] ?? ''),
++    set: (field, value) => { values[field] = value },
++    toJSON: () => ({ ...values }),
++  }
++}
++
++function matches(row, filter, params) {
++  for (const match of filter.matchAll(/\b([a-z_]+)\s*=\s*\{:(\w+)\}/g)) {
++    if (row.getString(match[1]) !== String(params[match[2]] ?? '')) return false
++  }
++  for (const match of filter.matchAll(/\b([a-z_]+)\s*=\s*["']([^"']*)["']/g)) {
++    if (row.getString(match[1]) !== match[2]) return false
++  }
++  return true
++}
++
++function harness({ ownInstance = false, role = 'admin', memberStatus = 'active', orgStatus = 'active', concurrentSave = false } = {}) {
++  const foreign = record({ id: 'leandro-instance', user_id: 'leandro', organization_id: 'company-1', instance_name: 'user_leandro', status: 'connected' })
++  const records = [foreign]
++  if (ownInstance) records.push(record({ id: 'richard-existing', user_id: 'richard', organization_id: 'company-1', instance_name: 'richard-existing-name', status: 'pending' }))
++  // Há outro membro ativo antes de Richard, para a consulta não poder escolher qualquer membro da empresa.
++  const memberships = [
++    record({ user_id: 'leandro', organization_id: 'company-1', status: 'active', role: 'owner' }),
++    record({ user_id: 'richard', organization_id: 'company-1', status: memberStatus, role }),
++  ]
++  const saves = []
++  let route
++  let competingSaveInserted = false
++  vm.runInNewContext(source, {
++    routerAdd(method, path, handler) {
++      assert.equal(method, 'POST')
++      assert.equal(path, '/backend/v1/instance/ensure')
++      route = handler
++    },
++    Record: class { constructor() { return record({ id: 'richard-created' }) } },
++    $apis: { requireAuth: () => Symbol('auth') },
++    $app: {
++      findFirstRecordByFilter(collection, filter, params) {
++        const candidates = collection === 'organization_members' ? memberships : records
++        assert.ok(['organization_members', 'whatsapp_instances'].includes(collection))
++        const found = candidates.find((row) => matches(row, filter, params))
++        if (!found) throw new Error('Record not found')
++        return found
++      },
++      findRecordById(collection, id) {
++        assert.equal(collection, 'organizations')
++        if (id !== 'company-1') throw new Error('Organization not found')
++        return record({ id, status: orgStatus, owner_id: 'leandro' })
++      },
++      findCollectionByNameOrId: (name) => ({ name }),
++      save(row) {
++        saves.push({ ...row.values })
++        if (concurrentSave && !competingSaveInserted) {
++          competingSaveInserted = true
++          records.push(record({ ...row.values, id: 'richard-concurrent' }))
++          throw new Error('UNIQUE constraint failed: whatsapp_instances.organization_id, whatsapp_instances.user_id')
++        }
++        records.push(row)
++      },
++      logger: () => ({ error() {} }),
++    },
++    $http: { send() { assert.fail('O endpoint não deve chamar a Evolution diretamente') } },
++  })
++  const invoke = (body = {}) => route({
++    auth: { id: 'richard' },
++    requestInfo: () => ({ body }),
++    json: (status, data) => ({ status, body: JSON.parse(JSON.stringify(data)) }),
++    forbiddenError: (message) => ({ status: 403, body: { message } }),
++  })
++  return { invoke, records, saves, foreign }
++}
++
++test('preparar WhatsApp cria uma sessão pendente própria sem reutilizar a sessão conectada da empresa', () => {
++  const h = harness()
++  const response = h.invoke({ organization_id: 'company-1' })
++
++  assert.equal(response.status, 201)
++  assert.equal(response.body.created, true)
++  assert.equal(response.body.instance.user_id, 'richard')
++  assert.equal(response.body.instance.organization_id, 'company-1')
++  assert.equal(response.body.instance.status, 'pending')
++  assert.equal(response.body.instance.qrcode, '')
++  assert.notEqual(response.body.instance.instance_name, h.foreign.getString('instance_name'))
++  assert.equal(h.saves.length, 1)
++  assert.equal(h.foreign.getString('status'), 'connected')
++})
++
++test('preparação repetida é idempotente e mantém o nome da instância legada do próprio login', () => {
++  const h = harness({ ownInstance: true })
++  const first = h.invoke()
++  const second = h.invoke()
++
++  assert.equal(first.status, 200)
++  assert.equal(second.status, 200)
++  assert.equal(first.body.created, false)
++  assert.equal(second.body.instance.id, 'richard-existing')
++  assert.equal(first.body.instance.instance_name, 'richard-existing-name')
++  assert.equal(h.saves.length, 0)
++  assert.equal(h.records.length, 2)
++})
++
++test('não aceita user_id ou instance_id do corpo para preparar sessão em nome de outro usuário', () => {
++  const h = harness()
++  const response = h.invoke({ organization_id: 'company-1', user_id: 'leandro', instance_id: 'leandro-instance' })
++
++  assert.equal(response.status, 201)
++  assert.equal(response.body.instance.user_id, 'richard')
++  assert.notEqual(response.body.instance.id, 'leandro-instance')
++  assert.equal(h.foreign.getString('status'), 'connected')
++})
++
++for (const role of ['agent', 'supervisor', 'viewer']) {
++  test(`perfil ${role} não provisiona sessão administrativa`, () => {
++    const h = harness({ role })
++    const response = h.invoke()
++
++    assert.equal(response.status, 403)
++    assert.equal(h.saves.length, 0)
++    assert.equal(h.records.length, 1)
++  })
++}
++
++test('associação inativa não herda os direitos do proprietário ativo da mesma organização', () => {
++  const h = harness({ memberStatus: 'inactive' })
++  const response = h.invoke({ organization_id: 'company-1' })
++
++  assert.equal(response.status, 403)
++  assert.equal(h.saves.length, 0)
++})
++
++test('empresa não vinculada e organização inativa são rejeitadas antes de criar registros', () => {
++  const wrongOrg = harness()
++  assert.equal(wrongOrg.invoke({ organization_id: 'company-2' }).status, 403)
++  assert.equal(wrongOrg.saves.length, 0)
++
++  const inactiveOrg = harness({ orgStatus: 'inactive' })
++  assert.equal(inactiveOrg.invoke({ organization_id: 'company-1' }).status, 403)
++  assert.equal(inactiveOrg.saves.length, 0)
++})
++
++test('colisão com preparação concorrente retorna a sessão própria vencedora sem criar outra', () => {
++  const h = harness({ concurrentSave: true })
++  const response = h.invoke({ organization_id: 'company-1' })
++
++  assert.equal(response.status, 200)
++  assert.equal(response.body.created, false)
++  assert.equal(response.body.instance.id, 'richard-concurrent')
++  assert.equal(response.body.instance.user_id, 'richard')
++  assert.equal(h.records.filter((row) => row.getString('user_id') === 'richard').length, 1)
++  assert.equal(h.foreign.getString('status'), 'connected')
++})
+diff --git a/tests/instance-qr.test.mjs b/tests/instance-qr.test.mjs
+index 791100c..835c368 100644
+--- a/tests/instance-qr.test.mjs
++++ b/tests/instance-qr.test.mjs
+@@ -27,15 +27,18 @@ function record(values) {
+ 
+ function execute({
+   userId = 'owner-1',
+-  membershipRole = null,
++  instanceOwner = 'owner-1',
++  membershipRole = 'owner',
+   membershipOrganization = 'company-1',
++  membershipActive = true,
++  organizationStatus = 'active',
+   storedStatus = 'pending',
+   responses = {},
+ } = {}) {
+   const values = {
+     id: 'instance-1',
+     organization_id: 'company-1',
+-    user_id: 'owner-1',
++    user_id: instanceOwner,
+     instance_name: instanceName,
+     status: storedStatus,
+     qrcode: '',
+@@ -68,7 +71,7 @@ function execute({
+       findRecordById(collection, id) {
+         if (collection === 'whatsapp_instances' && id === values.id) return instance
+         if (collection === 'organizations' && id === values.organization_id) {
+-          return record({ id, owner_id: 'owner-1' })
++          return record({ id, owner_id: 'owner-1', status: organizationStatus })
+         }
+         throw new Error('Record not found')
+       },
+@@ -77,8 +80,8 @@ function execute({
+         assert.match(filter, /status\s*=\s*"active"/)
+         assert.equal(params.organizationId, values.organization_id)
+         assert.equal(params.userId, userId)
+-        if (membershipRole && membershipOrganization === params.organizationId) {
+-          return record({ role: membershipRole })
++        if (membershipRole && membershipActive && membershipOrganization === params.organizationId) {
++          return record({ role: membershipRole, status: 'active', user_id: userId, organization_id: membershipOrganization })
+         }
+         throw new Error('Membership not found')
+       },
+@@ -149,6 +152,39 @@ test('bloqueia membro somente leitura antes de chamar a Evolution ou gravar dado
+   assert.equal(result.saves.length, 0)
+ })
+ 
++test('administrador da mesma empresa não pode obter nem renovar o QR de outro login', () => {
++  const result = execute({ userId: 'admin-1', membershipRole: 'admin', instanceOwner: 'owner-1' })
++
++  assert.equal(result.response.status, 403)
++  assert.equal(result.calls.length, 0)
++  assert.equal(result.saves.length, 0)
++  assert.equal(result.values.status, 'pending')
++})
++
++test('proprietário da empresa não pode operar a sessão pessoal de outro administrador', () => {
++  const result = execute({ userId: 'owner-1', instanceOwner: 'admin-1' })
++
++  assert.equal(result.response.status, 403)
++  assert.equal(result.calls.length, 0)
++  assert.equal(result.saves.length, 0)
++})
++
++test('proprietário sem associação ativa não obtém QR mesmo sendo dono da instância', () => {
++  const result = execute({ membershipActive: false })
++
++  assert.equal(result.response.status, 403)
++  assert.equal(result.calls.length, 0)
++  assert.equal(result.saves.length, 0)
++})
++
++test('organização inativa bloqueia QR antes de alterar ou conectar qualquer aparelho', () => {
++  const result = execute({ organizationStatus: 'inactive' })
++
++  assert.equal(result.response.status, 403)
++  assert.equal(result.calls.length, 0)
++  assert.equal(result.saves.length, 0)
++})
++
+ test('instância remota ausente é criada uma única vez e retorna o QR do provisionamento', () => {
+   const result = execute({
+     responses: {
+@@ -180,6 +216,7 @@ test('instância remota ausente é criada uma única vez e retorna o QR do provi
+ test('instância existente não é duplicada e atualiza o webhook no contrato v2', () => {
+   const result = execute({
+     userId: 'admin-1',
++    instanceOwner: 'admin-1',
+     membershipRole: 'admin',
+     responses: existingResponses({ statusCode: 200, json: { base64: qrImage } }),
+   })
+diff --git a/tests/integration-status.test.mjs b/tests/integration-status.test.mjs
+index 5bc7d95..d9e1326 100644
+--- a/tests/integration-status.test.mjs
++++ b/tests/integration-status.test.mjs
+@@ -21,7 +21,7 @@ const instanceName = 'org_company 1'
+ const instancePath = encodeURIComponent(instanceName)
+ 
+ function record(values) {
+-  return { getString: (field) => String(values[field] ?? '') }
++  return { id: values.id, getString: (field) => String(values[field] ?? '') }
+ }
+ 
+ function webhookConfig(overrides = {}) {
+@@ -37,6 +37,9 @@ function webhookConfig(overrides = {}) {
+ function execute({
+   role = 'owner',
+   membershipFound = true,
++  instanceFound = true,
++  organizationStatus = 'active',
++  storedStatus = 'connected',
+   secrets = {},
+   config = webhookConfig(),
+   wrappedConfig = false,
+@@ -53,6 +56,7 @@ function execute({
+   history = { messages: { total: 0, records: [] } },
+ } = {}) {
+   const calls = []
++  const instanceQueries = []
+   const authMiddleware = Symbol('requireAuth')
+   const configuredSecrets = {
+     EVOLUTION_API_URL: `${apiUrl}/`,
+@@ -75,17 +79,37 @@ function execute({
+     $secrets: { get: (name) => configuredSecrets[name] },
+     $app: {
+       findFirstRecordByFilter(collection, filter, params) {
+-        assert.equal(collection, 'organization_members')
+-        assert.match(filter, /status\s*=\s*"active"/)
+-        assert.equal(params.userId, 'user-1')
+-        if (!membershipFound) throw new Error('Membership not found')
+-        return record({ role, organization_id: 'company-1' })
++        if (collection === 'organization_members') {
++          assert.match(filter, /status\s*=\s*"active"/)
++          assert.equal(params.userId, 'user-1')
++          if (!membershipFound) throw new Error('Membership not found')
++          return record({ role, user_id: 'user-1', status: 'active', organization_id: 'company-1' })
++        }
++        assert.equal(collection, 'whatsapp_instances')
++        instanceQueries.push({ filter, params: { ...params } })
++        // A instância de outro administrador aparece primeiro de propósito.
++        const candidates = [
++          { id: 'other-instance', user_id: 'other-user', organization_id: 'company-1', instance_name: 'other-session', status: 'connected' },
++          ...(instanceFound ? [{ id: 'instance-1', user_id: 'user-1', organization_id: 'company-1', instance_name: instanceName, status: storedStatus }] : []),
++        ]
++        const selected = candidates.find((candidate) => ['user_id', 'organization_id'].every((field) => {
++          const binding = filter.match(new RegExp(`\\b${field}\\s*=\\s*\\{:(\\w+)\\}`))
++          return !binding || candidate[field] === params[binding[1]]
++        }))
++        if (!selected) throw new Error('Instance not found')
++        return record(selected)
+       },
+       findFirstRecordByData(collection, field, value) {
+         assert.equal(collection, 'whatsapp_instances')
+         assert.equal(field, 'organization_id')
+         assert.equal(value, 'company-1')
+-        return record({ instance_name: instanceName, status: 'connected' })
++        // Uma busca ampla por empresa reproduz o defeito original.
++        return record({ user_id: 'other-user', organization_id: 'company-1', instance_name: 'other-session', status: 'connected' })
++      },
++      findRecordById(collection, id) {
++        assert.equal(collection, 'organizations')
++        assert.equal(id, 'company-1')
++        return record({ id, owner_id: 'user-1', status: organizationStatus })
+       },
+     },
+     $http: {
+@@ -141,9 +165,36 @@ function execute({
+   ]) {
+     assert.equal(serialized.includes(privateValue), false, 'O diagnóstico expôs dados privados')
+   }
+-  return { response, calls }
++  return { response, calls, instanceQueries }
+ }
+ 
++test('administrador sem sessão própria não herda conexão nem diagnóstico de outro login da mesma empresa', () => {
++  const { response, calls } = execute({ role: 'admin', instanceFound: false })
++
++  assert.equal(response.status, 200)
++  assert.equal(response.body.instance.status, 'missing')
++  assert.equal(response.body.provider, null)
++  assert.equal(calls.length, 0)
++})
++
++test('diagnóstico consulta a sessão do login mesmo com outra sessão conectada antes dela', () => {
++  const { response, calls } = execute({ role: 'admin', storedStatus: 'pending', remoteState: 'close' })
++
++  assert.equal(response.body.instance.status, 'pending')
++  assert.equal(response.body.provider.remoteState, 'close')
++  assert.equal(calls.length, 4)
++  assert.equal(calls.some((call) => call.url.includes('other-session')), false)
++})
++
++test('organização inativa não consulta a Evolution nem retorna estado de dispositivo', () => {
++  const { response, calls } = execute({ organizationStatus: 'inactive' })
++
++  assert.equal(response.status, 200)
++  assert.equal(response.body.instance.status, 'missing')
++  assert.equal(response.body.provider, null)
++  assert.equal(calls.length, 0)
++})
++
+ test('membro somente leitura não consulta a Evolution nem recebe diagnóstico administrativo', () => {
+   const { response, calls } = execute({ role: 'viewer' })
+ 
+diff --git a/tests/multitenancy.test.mjs b/tests/multitenancy.test.mjs
+index 15ca075..30cfad9 100644
+--- a/tests/multitenancy.test.mjs
++++ b/tests/multitenancy.test.mjs
+@@ -35,7 +35,9 @@ test('o webhook deriva a empresa da instância e a propaga para contato e mensag
+   const source = await read('pocketbase/hooks/webhook_evolution.js')
+ 
+   assert.match(source, /const organizationId = instance\.getString\('organization_id'\)/)
+-  assert.match(source, /organization_id = \{:organizationId\} && remote_jid = \{:jid\}/)
++  assert.match(source, /organization_id = \{:organizationId\}/)
++  assert.match(source, /instance_id = \{:instanceId\}/)
++  assert.match(source, /remote_jid = \{:jid\}/)
+   assert.match(source, /contact\.set\('organization_id', organizationId\)/)
+   assert.match(source, /msgRecord\.set\('organization_id', organizationId\)/)
+ })
+@@ -44,8 +46,9 @@ test('o envio valida membro ativo e impede cruzamento entre contato e instância
+   const source = await read('pocketbase/hooks/message_send.js')
+ 
+   assert.match(source, /status = "active"/)
+-  assert.match(source, /membershipRole !== 'viewer'/)
++  assert.match(source, /\['owner', 'admin', 'supervisor', 'agent'\]/)
+   assert.match(source, /instance\.getString\('organization_id'\) !== organizationId/)
++  assert.match(source, /instance\.getString\('user_id'\) !== e\.auth\?\.id/)
+   assert.match(source, /throw new ForbiddenError\('Access denied'\)/)
+   assert.match(source, /msgRecord\.set\('organization_id', organizationId\)/)
+ })
+@@ -54,6 +57,6 @@ test('respostas da IA mantêm o escopo da organização da mensagem recebida', a
+   const source = await read('pocketbase/hooks/on_message_create_ai.js')
+ 
+   assert.match(source, /const organizationId = msg\.getString\('organization_id'\)/)
+-  assert.match(source, /organization_id='\$\{organizationId\}' && instance_id=/)
++  assert.match(source, /organization_id = \{:organizationId\} && instance_id = \{:instanceId\} && user_id = \{:userId\}/)
+   assert.equal((source.match(/msgRecord\.set\('organization_id', organizationId\)/g) || []).length, 2)
+ })
+diff --git a/tests/whatsapp-user-isolation.test.mjs b/tests/whatsapp-user-isolation.test.mjs
+new file mode 100644
+index 0000000..86817db
+--- /dev/null
++++ b/tests/whatsapp-user-isolation.test.mjs
+@@ -0,0 +1,351 @@
++import assert from 'node:assert/strict'
++import { readFile } from 'node:fs/promises'
++import test from 'node:test'
++import vm from 'node:vm'
++
++const readHook = (name) => readFile(new URL(`../pocketbase/hooks/${name}.js`, import.meta.url), 'utf8')
++const [sendSource, logoutSource, webhookSource] = await Promise.all([
++  readHook('message_send'),
++  readHook('instance_logout'),
++  readHook('webhook_evolution'),
++])
++
++const apiUrl = 'https://evolution.example.test'
++const secret = 'test-webhook-secret'
++const apiKey = 'test-api-key'
++
++function record(values) {
++  return {
++    id: values.id,
++    values,
++    getString: (field) => String(values[field] ?? ''),
++    getBool: (field) => values[field] === true,
++    set: (field, value) => { values[field] = value },
++    toJSON: () => ({ ...values }),
++  }
++}
++
++// Executa apenas comparações parametrizadas usadas pelos hooks. Sem o predicado
++// de usuário/instância, o registro alheio (primeiro da lista) realmente é escolhido.
++function matches(row, filter, params = {}) {
++  for (const match of filter.matchAll(/\b([a-z_]+)\s*=\s*\{:(\w+)\}/g)) {
++    if (row.getString(match[1]) !== String(params[match[2]] ?? '')) return false
++  }
++  for (const match of filter.matchAll(/\b([a-z_]+)\s*=\s*["']([^"']*)["']/g)) {
++    // Papéis agrupados por OR são tratados no acesso à associação abaixo.
++    if (match[1] === 'role') continue
++    if (row.getString(match[1]) !== match[2]) return false
++  }
++  return true
++}
++
++function errors() {
++  return Object.fromEntries([
++    ['ForbiddenError', 403], ['BadRequestError', 400],
++    ['InternalServerError', 500], ['UnauthorizedError', 401],
++  ].map(([name, status]) => [name, class extends Error {
++    constructor(message) { super(message); this.name = name; this.status = status }
++  }]))
++}
++
++function executeSend({
++  userId = 'richard',
++  instanceOwner = 'richard',
++  contactAuthor = instanceOwner,
++  organization = 'company-1',
++  organizationStatus = 'active',
++  membership = true,
++  role = 'admin',
++} = {}) {
++  const calls = []
++  const saved = []
++  const contact = record({
++    id: 'contact-1', user_id: contactAuthor, organization_id: organization,
++    instance_id: 'instance-1', remote_jid: '5511999999999@s.whatsapp.net',
++  })
++  const instance = record({
++    id: 'instance-1', user_id: instanceOwner, organization_id: organization,
++    instance_name: `session-${instanceOwner}`, status: 'connected',
++  })
++  let route
++  const errorTypes = errors()
++  vm.runInNewContext(sendSource, {
++    ...errorTypes,
++    routerAdd: (_method, _path, handler) => { route = handler },
++    Record: class { constructor(collection) { return record({ id: 'new-message', collection: collection.name }) } },
++    $apis: { requireAuth: () => Symbol('auth'), bodyLimit: () => Symbol('limit') },
++    $security: { randomString: () => 'random-id' },
++    $secrets: { get: (name) => ({ EVOLUTION_API_URL: apiUrl, EVOLUTION_API_KEY: apiKey })[name] },
++    $app: {
++      findRecordById(collection, id) {
++        if (collection === 'whatsapp_contacts' && id === contact.id) return contact
++        if (collection === 'whatsapp_instances' && id === instance.id) return instance
++        if (collection === 'organizations' && id === organization) return record({ id, owner_id: 'leandro', status: organizationStatus })
++        throw new Error('Record not found')
++      },
++      findFirstRecordByFilter(collection, filter, params) {
++        assert.equal(collection, 'organization_members')
++        if (!membership || organization !== 'company-1') throw new Error('Membership not found')
++        const row = record({ user_id: userId, organization_id: 'company-1', status: 'active', role })
++        if (!matches(row, filter, params)) throw new Error('Membership not found')
++        return row
++      },
++      findCollectionByNameOrId: (name) => ({ name }),
++      saveNoValidate(row) { saved.push({ ...row.values }) },
++      logger: () => ({ error() {}, warn() {} }),
++    },
++    $http: { send(request) { calls.push(JSON.parse(JSON.stringify(request))); return { statusCode: 201, json: { key: { id: 'upstream-message' } } } } },
++  })
++  let response
++  try {
++    response = route({
++      auth: { id: userId },
++      requestInfo: () => ({ body: { contact_id: contact.id, text: 'Mensagem de teste', type: 'text' } }),
++      findUploadedFiles: () => [],
++      json: (status, body) => ({ status, body }),
++    })
++  } catch (error) {
++    response = { status: error.status, body: { message: error.message } }
++  }
++  return { response, calls, saved, contact, instance }
++}
++
++test('administrador da mesma empresa não envia mensagem pela sessão de outro login', () => {
++  const result = executeSend({ userId: 'richard', instanceOwner: 'leandro' })
++
++  assert.equal(result.response.status, 403)
++  assert.equal(result.calls.length, 0)
++  assert.equal(result.saved.length, 0)
++})
++
++test('o autor histórico do contato não concede propriedade sobre a sessão de outra pessoa', () => {
++  const result = executeSend({ userId: 'richard', instanceOwner: 'leandro', contactAuthor: 'richard' })
++
++  assert.equal(result.response.status, 403)
++  assert.equal(result.calls.length, 0)
++  assert.equal(result.saved.length, 0)
++})
++
++test('proprietário da empresa também não envia pela sessão pessoal de Richard', () => {
++  const result = executeSend({ userId: 'leandro', instanceOwner: 'richard' })
++
++  assert.equal(result.response.status, 403)
++  assert.equal(result.calls.length, 0)
++  assert.equal(result.saved.length, 0)
++})
++
++test('envio permitido usa somente a própria sessão e preserva a empresa e o contato', () => {
++  const result = executeSend()
++
++  assert.equal(result.response.status, 200)
++  assert.equal(result.calls.length, 1)
++  assert.equal(result.calls[0].url, `${apiUrl}/message/sendText/session-richard`)
++  const message = result.saved.find((item) => item.collection === 'whatsapp_messages')
++  assert.equal(message.instance_id, 'instance-1')
++  assert.equal(message.organization_id, 'company-1')
++  assert.equal(message.contact_id, 'contact-1')
++  assert.equal(message.user_id, 'richard')
++  assert.equal(message.message_id, 'upstream-message')
++})
++
++test('membro sem vínculo ativo não envia nem usando uma sessão com seu user_id', () => {
++  const result = executeSend({ membership: false })
++
++  assert.equal(result.response.status, 403)
++  assert.equal(result.calls.length, 0)
++  assert.equal(result.saved.length, 0)
++})
++
++test('organização inativa impede envio pela própria sessão antes de qualquer chamada externa', () => {
++  const result = executeSend({ organizationStatus: 'inactive' })
++
++  assert.equal(result.response.status, 403)
++  assert.equal(result.calls.length, 0)
++  assert.equal(result.saved.length, 0)
++})
++
++test('membro somente leitura não envia mesmo na própria sessão', () => {
++  const result = executeSend({ role: 'viewer' })
++
++  assert.equal(result.response.status, 403)
++  assert.equal(result.calls.length, 0)
++  assert.equal(result.saved.length, 0)
++})
++
++function executeLogout({ ownInstance = true, membership = true } = {}) {
++  const userId = 'richard'
++  const foreign = record({ id: 'leandro-instance', user_id: 'leandro', organization_id: 'company-1', instance_name: 'session-leandro', status: 'connected' })
++  const own = record({ id: 'richard-instance', user_id: userId, organization_id: 'company-1', instance_name: 'session-richard', status: 'connected' })
++  const candidates = [foreign, ...(ownInstance ? [own] : [])]
++  const calls = []
++  const saves = []
++  let route
++  vm.runInNewContext(logoutSource, {
++    routerAdd: (_method, _path, handler) => { route = handler },
++    $apis: { requireAuth: () => Symbol('auth') },
++    $secrets: { get: (name) => ({ EVOLUTION_API_URL: apiUrl, EVOLUTION_API_KEY: apiKey })[name] },
++    $app: {
++      findFirstRecordByFilter(collection, filter, params) {
++        if (collection === 'organization_members') {
++          if (!membership) throw new Error('Membership not found')
++          return record({ role: 'admin', status: 'active', user_id: userId, organization_id: 'company-1' })
++        }
++        assert.equal(collection, 'whatsapp_instances')
++        const selected = candidates.find((candidate) => matches(candidate, filter, params))
++        if (!selected) throw new Error('Instance not found')
++        return selected
++      },
++      findFirstRecordByData: () => foreign,
++      findRecordById(collection, id) {
++        assert.equal(collection, 'organizations')
++        return record({ id, owner_id: 'leandro', status: 'active' })
++      },
++      save(row) { saves.push(row.id) },
++      saveNoValidate(row) { saves.push(row.id) },
++      logger: () => ({ error() {} }),
++    },
++    $http: { send(request) { calls.push(JSON.parse(JSON.stringify(request))); return { statusCode: 200, json: {} } } },
++  })
++  const response = route({
++    auth: { id: userId },
++    requestInfo: () => ({ body: {} }),
++    json: (status, body) => ({ status, body }),
++    notFoundError: (message) => ({ status: 404, body: { message } }),
++    forbiddenError: (message) => ({ status: 403, body: { message } }),
++    unauthorizedError: (message) => ({ status: 401, body: { message } }),
++  })
++  return { response, calls, saves, foreign, own }
++}
++
++test('logout sem sessão própria não desconecta a primeira sessão conectada da empresa', () => {
++  const result = executeLogout({ ownInstance: false })
++
++  assert.equal(result.response.status, 404)
++  assert.equal(result.calls.length, 0)
++  assert.equal(result.saves.length, 0)
++  assert.equal(result.foreign.getString('status'), 'connected')
++})
++
++test('logout da própria sessão preserva a sessão conectada de Leandro', () => {
++  const result = executeLogout()
++
++  assert.equal(result.response.status, 200)
++  assert.equal(result.calls.length, 1)
++  assert.equal(result.calls[0].url, `${apiUrl}/instance/logout/session-richard`)
++  assert.deepEqual(result.saves, ['richard-instance'])
++  assert.equal(result.foreign.getString('status'), 'connected')
++  assert.equal(result.own.getString('status'), 'disconnected')
++})
++
++test('logout sem associação ativa não chama o provedor', () => {
++  const result = executeLogout({ membership: false })
++
++  assert.ok([403, 404].includes(result.response.status))
++  assert.equal(result.calls.length, 0)
++  assert.equal(result.saves.length, 0)
++})
++
++function webhookHarness() {
++  const instances = [
++    record({ id: 'leandro-instance', user_id: 'leandro', organization_id: 'company-1', instance_name: 'session-leandro', status: 'connected' }),
++    record({ id: 'richard-instance', user_id: 'richard', organization_id: 'company-1', instance_name: 'session-richard', status: 'pending' }),
++  ]
++  const contacts = []
++  const messages = []
++  const httpCalls = []
++  const saves = []
++  const collections = { whatsapp_instances: instances, whatsapp_contacts: contacts, whatsapp_messages: messages }
++  let route
++  let sequence = 0
++  vm.runInNewContext(webhookSource, {
++    routerAdd: (_method, _path, handler) => { route = handler },
++    console: { info() {}, error() {} },
++    Record: class { constructor(collection) { return record({ id: `new-${++sequence}`, collection: collection.name }) } },
++    $secrets: { get: (name) => ({ EVOLUTION_WEBHOOK_SECRET: secret, EVOLUTION_API_URL: apiUrl, EVOLUTION_API_KEY: apiKey })[name] },
++    $app: {
++      findFirstRecordByData(collection, field, value) {
++        const selected = collections[collection]?.find((row) => row.getString(field) === String(value))
++        if (!selected) throw new Error('Record not found')
++        return selected
++      },
++      findRecordsByFilter(collection, filter, _sort, limit, offset, params) {
++        return (collections[collection] || []).filter((row) => matches(row, filter, params)).slice(offset, offset + limit)
++      },
++      findFirstRecordByFilter(collection, filter, params) {
++        const selected = (collections[collection] || []).find((row) => matches(row, filter, params))
++        if (!selected) throw new Error('Record not found')
++        return selected
++      },
++      findCollectionByNameOrId: (name) => ({ name }),
++      saveNoValidate(row) {
++        saves.push(row.id)
++        const list = collections[row.values.collection]
++        if (list && !list.some((existing) => existing.id === row.id)) list.push(row)
++      },
++      logger: () => ({ error() {}, warn() {} }),
++    },
++    $http: { send(request) { httpCalls.push(request); throw new Error('Nenhum HTTP é necessário para texto') } },
++  })
++  const emit = (instance, { event = 'messages.upsert', messageId = 'same-upstream-id', text = 'Teste isolado', data, header = secret } = {}) => route({
++    request: { header: { get: () => header } },
++    requestInfo: () => ({ body: {
++      event, instance,
++      data: data || { key: { id: messageId, remoteJid: '5511999999999@s.whatsapp.net', fromMe: false }, pushName: 'Contato de teste', message: { conversation: text } },
++    } }),
++    json: (status, body) => ({ status, body }),
++  })
++  return { emit, instances, contacts, messages, httpCalls, saves }
++}
++
++test('mesmo contato e mesmo message_id em duas sessões geram históricos independentes', () => {
++  const h = webhookHarness()
++  assert.equal(h.emit('session-leandro').status, 200)
++  assert.equal(h.emit('session-richard').status, 200)
++
++  assert.equal(h.contacts.length, 2)
++  assert.equal(h.messages.length, 2)
++  for (const owner of ['leandro', 'richard']) {
++    const contact = h.contacts.find((row) => row.getString('instance_id') === `${owner}-instance`)
++    const message = h.messages.find((row) => row.getString('instance_id') === `${owner}-instance`)
++    assert.ok(contact, `Contato de ${owner} ausente`)
++    assert.ok(message, `Mensagem de ${owner} ausente`)
++    assert.equal(contact.getString('user_id'), owner)
++    assert.equal(message.getString('user_id'), owner)
++    assert.equal(message.getString('contact_id'), contact.id)
++    assert.equal(message.getString('organization_id'), 'company-1')
++  }
++  assert.equal(h.httpCalls.length, 0)
++})
++
++test('reenvio do mesmo webhook é deduplicado somente dentro da própria sessão', () => {
++  const h = webhookHarness()
++  h.emit('session-leandro')
++  h.emit('session-richard')
++  h.emit('session-richard')
++
++  assert.equal(h.contacts.length, 2)
++  assert.equal(h.messages.length, 2)
++  assert.equal(h.messages.filter((row) => row.getString('instance_id') === 'richard-instance').length, 1)
++})
++
++test('evento de conexão de Richard não altera o status da instância de Leandro', () => {
++  const h = webhookHarness()
++  const response = h.emit('session-richard', { event: 'connection.update', data: { state: 'close' } })
++
++  assert.equal(response.status, 200)
++  assert.equal(h.instances[0].getString('status'), 'connected')
++  assert.equal(h.instances[1].getString('status'), 'disconnected')
++  assert.equal(h.contacts.length, 0)
++  assert.equal(h.messages.length, 0)
++})
++
++test('webhook não autenticado não cria contato, mensagem nem altera conexão', () => {
++  const h = webhookHarness()
++  const response = h.emit('session-richard', { header: 'wrong-secret' })
++
++  assert.equal(response.status, 401)
++  assert.equal(h.saves.length, 0)
++  assert.equal(h.httpCalls.length, 0)
++  assert.equal(h.contacts.length, 0)
++  assert.equal(h.messages.length, 0)
++})
+diff --git a/tests/whatsapp-user-migration.test.mjs b/tests/whatsapp-user-migration.test.mjs
+new file mode 100644
+index 0000000..e17606a
+--- /dev/null
++++ b/tests/whatsapp-user-migration.test.mjs
+@@ -0,0 +1,154 @@
++import assert from 'node:assert/strict'
++import { readFile } from 'node:fs/promises'
++import { DatabaseSync } from 'node:sqlite'
++import test from 'node:test'
++import vm from 'node:vm'
++
++const source = await readFile(new URL('../pocketbase/migrations/0016_whatsapp_user_scope.js', import.meta.url), 'utf8')
++
++function harness({ duplicateOwner = false, missingOwner = false, documents = false, chunksOnly = false } = {}) {
++  const db = new DatabaseSync(':memory:')
++  db.exec(`
++    CREATE TABLE whatsapp_instances (id TEXT PRIMARY KEY, user_id TEXT, organization_id TEXT, instance_name TEXT);
++    CREATE TABLE whatsapp_contacts (id TEXT PRIMARY KEY, user_id TEXT, organization_id TEXT, instance_id TEXT, remote_jid TEXT);
++    CREATE TABLE whatsapp_messages (id TEXT PRIMARY KEY, user_id TEXT, organization_id TEXT, instance_id TEXT, contact_id TEXT, message_id TEXT, body TEXT);
++    INSERT INTO whatsapp_instances VALUES ('leandro-instance', 'leandro', 'company-1', 'user_leandro');
++    INSERT INTO whatsapp_contacts VALUES ('contact-legacy', 'leandro', 'company-1', 'leandro-instance', '5511999999999@s.whatsapp.net');
++    INSERT INTO whatsapp_messages VALUES ('message-legacy', 'richard', 'company-1', 'leandro-instance', 'contact-legacy', 'same-provider-id', 'Histórico preservado');
++    CREATE UNIQUE INDEX idx_wi_name ON whatsapp_instances (instance_name);
++    CREATE INDEX idx_wc_jid ON whatsapp_contacts (user_id, remote_jid);
++    CREATE UNIQUE INDEX idx_wm_id ON whatsapp_messages (message_id);
++    CREATE INDEX idx_messages_contact_legacy ON whatsapp_messages (contact_id);
++  `)
++  if (duplicateOwner) db.exec("INSERT INTO whatsapp_instances VALUES ('other-legacy', 'leandro', 'company-1', 'other-legacy-name')")
++  if (missingOwner) db.exec("UPDATE whatsapp_instances SET user_id = '' WHERE id = 'leandro-instance'")
++  const media = { name: 'media_file', protected: false }
++  const oldAccess = "@request.auth.id != ''"
++  const collection = (name, indexes = []) => ({
++    name, indexes: [...indexes], listRule: oldAccess, viewRule: oldAccess,
++    createRule: oldAccess, updateRule: oldAccess, deleteRule: oldAccess,
++    fields: { getByName: (field) => name === 'whatsapp_messages' && field === 'media_file' ? media : null },
++  })
++  const collections = {
++    whatsapp_instances: collection('whatsapp_instances', ['CREATE UNIQUE INDEX idx_wi_name ON whatsapp_instances (instance_name)']),
++    whatsapp_contacts: collection('whatsapp_contacts', ['CREATE INDEX idx_wc_jid ON whatsapp_contacts (user_id, remote_jid)']),
++    whatsapp_messages: collection('whatsapp_messages', [
++      'CREATE UNIQUE INDEX idx_wm_id ON whatsapp_messages (message_id)',
++      'CREATE INDEX idx_messages_contact_legacy ON whatsapp_messages (contact_id)',
++    ]),
++    ai_agents: collection('ai_agents'),
++  }
++  if (documents) collections.agent_documents = collection('agent_documents')
++  if (documents || chunksOnly) collections.agent_document_chunks = collection('agent_document_chunks')
++  const persisted = new Map(Object.values(collections).map((item) => [item.name, [...item.indexes]]))
++  const saves = []
++  let up
++  let down
++  const indexName = (sql) => sql.match(/\bINDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?["`\[]?([a-z_][a-z_0-9]*)/i)?.[1]
++  vm.runInNewContext(source, { migrate(forward, backward) { up = forward; down = backward } })
++  const app = {
++    findCollectionByNameOrId(name) {
++      if (!collections[name]) throw new Error('Collection not found')
++      return collections[name]
++    },
++    findAllRecords(name) {
++      assert.equal(name, 'whatsapp_instances')
++      return db.prepare('SELECT * FROM whatsapp_instances ORDER BY id').all().map((row) => ({ id: row.id, getString: (field) => String(row[field] ?? '') }))
++    },
++    save(item) {
++      assert.equal(collections[item.name], item, 'A migration não pode salvar ou reatribuir registros operacionais')
++      saves.push({ name: item.name, indexes: [...item.indexes], listRule: item.listRule, viewRule: item.viewRule })
++      const previous = persisted.get(item.name) || []
++      for (const sql of previous) {
++        if (!item.indexes.some((next) => indexName(next) === indexName(sql))) db.exec(`DROP INDEX "${indexName(sql)}"`)
++      }
++      for (const sql of item.indexes) {
++        if (!previous.some((before) => indexName(before) === indexName(sql))) db.exec(sql)
++      }
++      persisted.set(item.name, [...item.indexes])
++    },
++    delete() { assert.fail('A migration não pode excluir registros ou coleções') },
++  }
++  const rows = () => ({
++    instances: db.prepare('SELECT * FROM whatsapp_instances ORDER BY id').all().map((row) => ({ ...row })),
++    contacts: db.prepare('SELECT * FROM whatsapp_contacts ORDER BY id').all().map((row) => ({ ...row })),
++    messages: db.prepare('SELECT * FROM whatsapp_messages ORDER BY id').all().map((row) => ({ ...row })),
++  })
++  return { db, collections, saves, media, rows, run: () => up(app), rollback: () => down(app) }
++}
++
++test('migration preserva históricos e usa a sessão como autoridade, inclusive em mensagens escritas por outro usuário', () => {
++  const h = harness({ documents: true })
++  try {
++    const before = h.rows()
++    h.run()
++    assert.deepEqual(h.rows(), before)
++    assert.match(h.collections.whatsapp_instances.viewRule, /user_id = @request\.auth\.id/)
++    for (const name of ['whatsapp_contacts', 'whatsapp_messages', 'ai_agents']) {
++      assert.match(h.collections[name].viewRule, /instance_id\.user_id = @request\.auth\.id/)
++      assert.match(h.collections[name].viewRule, /instance_id\.organization_id = organization_id/)
++    }
++    assert.doesNotMatch(h.collections.whatsapp_messages.viewRule, /(?:^|&&)\s*user_id = @request\.auth\.id/)
++    assert.equal(h.media.protected, true)
++    assert.equal(h.collections.whatsapp_messages.createRule, null)
++    assert.equal(h.collections.whatsapp_instances.updateRule, null)
++    assert.match(h.collections.agent_documents.viewRule, /agent_id\.instance_id\.user_id = @request\.auth\.id/)
++    assert.match(h.collections.agent_document_chunks.viewRule, /document_id\.agent_id\.instance_id\.user_id = @request\.auth\.id/)
++  } finally { h.db.close() }
++})
++
++test('índice real SQLite permite mesmo ID em sessões distintas, mas continua bloqueando duplicata na mesma sessão', () => {
++  const h = harness()
++  try {
++    h.run()
++    const insert = h.db.prepare('INSERT INTO whatsapp_messages VALUES (?, ?, ?, ?, ?, ?, ?)')
++    assert.doesNotThrow(() => insert.run('message-richard', 'richard', 'company-1', 'richard-instance', 'contact-richard', 'same-provider-id', 'Mensagem independente'))
++    assert.throws(() => insert.run('message-duplicate', 'richard', 'company-1', 'richard-instance', 'contact-richard', 'same-provider-id', 'Duplicata'), /UNIQUE constraint failed/)
++    assert.equal(h.db.prepare('SELECT COUNT(*) AS count FROM whatsapp_messages').get().count, 2)
++    assert.equal(h.db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_messages_contact_legacy'").get().name, 'idx_messages_contact_legacy')
++    const messageSaves = h.saves.filter((item) => item.name === 'whatsapp_messages')
++    assert.equal(messageSaves.length, 2)
++    assert.ok(messageSaves[0].indexes.some((sql) => sql.includes('idx_wm_id')))
++    assert.ok(messageSaves[0].indexes.some((sql) => sql.includes('idx_whatsapp_messages_instance_message')))
++    assert.equal(messageSaves[1].indexes.some((sql) => /\bidx_wm_id\b/.test(sql)), false)
++  } finally { h.db.close() }
++})
++
++test('índice real impede preparar duas sessões do mesmo login na mesma empresa e permite outro login', () => {
++  const h = harness()
++  try {
++    h.run()
++    assert.throws(() => h.db.prepare('INSERT INTO whatsapp_instances VALUES (?, ?, ?, ?)').run('duplicate', 'leandro', 'company-1', 'different-name'), /UNIQUE constraint failed/)
++    assert.doesNotThrow(() => h.db.prepare('INSERT INTO whatsapp_instances VALUES (?, ?, ?, ?)').run('richard-instance', 'richard', 'company-1', 'user_richard'))
++  } finally { h.db.close() }
++})
++
++for (const [name, options] of [
++  ['proprietário duplicado', { duplicateOwner: true }],
++  ['sessão sem proprietário', { missingOwner: true }],
++]) {
++  test(`preflight rejeita ${name} antes de salvar qualquer coleção ou alterar histórico`, () => {
++    const h = harness(options)
++    try {
++      const before = h.rows()
++      assert.throws(() => h.run())
++      assert.equal(h.saves.length, 0)
++      assert.deepEqual(h.rows(), before)
++      assert.ok(h.db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_wm_id'").get())
++    } finally { h.db.close() }
++  })
++}
++
++test('rollback não apaga dados nem reabre o acesso compartilhado às sessões', () => {
++  const h = harness()
++  try {
++    h.run()
++    const before = h.rows()
++    const rules = Object.fromEntries(Object.values(h.collections).map((item) => [item.name, item.viewRule]))
++    const saves = h.saves.length
++    h.rollback()
++    assert.deepEqual(h.rows(), before)
++    assert.deepEqual(Object.fromEntries(Object.values(h.collections).map((item) => [item.name, item.viewRule])), rules)
++    assert.equal(h.saves.length, saves)
++  } finally { h.db.close() }
++})

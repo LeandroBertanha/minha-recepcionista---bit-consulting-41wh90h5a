@@ -22,25 +22,18 @@ routerAdd(
     const organizationId = contact.getString('organization_id')
     let hasOrganizationAccess = false
     let membershipRole = ''
-
-    if (organizationId) {
-      try {
-        const organization = $app.findRecordById('organizations', organizationId)
-        hasOrganizationAccess = organization.getString('owner_id') === e.auth?.id
-      } catch (_) {}
-
-      if (!hasOrganizationAccess) {
-        try {
-          const membership = $app.findFirstRecordByFilter(
-            'organization_members',
-            'organization_id = {:organizationId} && user_id = {:userId} && status = "active"',
-            { organizationId: organizationId, userId: e.auth?.id || '' },
-          )
-          membershipRole = membership.getString('role')
-          hasOrganizationAccess = membershipRole !== 'viewer'
-        } catch (_) {}
-      }
-    }
+    try {
+      const organization = $app.findRecordById('organizations', organizationId)
+      const membership = $app.findFirstRecordByFilter(
+        'organization_members',
+        'organization_id = {:organizationId} && user_id = {:userId} && status = "active"',
+        { organizationId, userId: e.auth?.id || '' },
+      )
+      membershipRole = membership.getString('role')
+      hasOrganizationAccess =
+        organization.getString('status') === 'active' &&
+        ['owner', 'admin', 'supervisor', 'agent'].indexOf(membershipRole) !== -1
+    } catch (_) {}
 
     if (!hasOrganizationAccess) {
       throw new ForbiddenError('Access denied')
@@ -52,7 +45,10 @@ routerAdd(
     } catch (_) {
       throw new InternalServerError('Instance not found')
     }
-    if (instance.getString('organization_id') !== organizationId) {
+    if (
+      instance.getString('organization_id') !== organizationId ||
+      instance.getString('user_id') !== e.auth?.id
+    ) {
       throw new ForbiddenError('Access denied')
     }
     const instanceName = instance.getString('instance_name')

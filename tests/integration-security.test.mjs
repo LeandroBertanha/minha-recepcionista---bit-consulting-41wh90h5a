@@ -38,6 +38,15 @@ test('as regras de tenant vinculam criação e alteração ao usuário autentica
   assert.match(source, /collection\.updateRule = .*user_id = @request\.auth\.id/)
 })
 
+test('o endpoint de diagnóstico consulta a sessão do próprio login', async () => {
+  const source = await read('pocketbase/hooks/integration_status.js')
+
+  assert.match(source, /organization_id = \{:organizationId\} && user_id = \{:userId\}/)
+  assert.match(source, /Instance ownership mismatch/)
+  assert.match(source, /id: instanceId/)
+  assert.match(source, /userId: instanceUserId/)
+})
+
 test('o endpoint de diagnóstico não retorna valores dos segredos', async () => {
   const source = await read('pocketbase/hooks/integration_status.js')
 

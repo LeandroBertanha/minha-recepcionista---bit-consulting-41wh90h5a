@@ -13,11 +13,19 @@ routerAdd(
         'user_id = {:userId} && status = "active" && (role = "owner" || role = "admin")',
         { userId: e.auth.id },
       )
-      instance = $app.findFirstRecordByData(
+      const organizationId = membership.getString('organization_id')
+      const organization = $app.findRecordById('organizations', organizationId)
+      if (organization.getString('status') !== 'active') return e.forbiddenError('Access denied')
+      instance = $app.findFirstRecordByFilter(
         'whatsapp_instances',
-        'organization_id',
-        membership.getString('organization_id'),
+        'organization_id = {:organizationId} && user_id = {:userId}',
+        { organizationId, userId: e.auth.id },
       )
+      if (
+        instance.getString('user_id') !== e.auth.id ||
+        instance.getString('organization_id') !== organizationId
+      )
+        return e.forbiddenError('Access denied')
     } catch (err) {
       return e.notFoundError('Instance not found')
     }

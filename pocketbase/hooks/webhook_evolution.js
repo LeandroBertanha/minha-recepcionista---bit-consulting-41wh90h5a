@@ -63,6 +63,7 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
 
       const fromMe = body.data?.key?.fromMe
       const messageId = body.data?.key?.id
+      if (!messageId) return e.json(200, { ok: true })
       const pushName = body.data?.pushName || remoteJid.split('@')[0]
 
       let type = 'text'
@@ -157,11 +158,11 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
       try {
         const records = $app.findRecordsByFilter(
           'whatsapp_contacts',
-          `organization_id = {:organizationId} && remote_jid = {:jid}`,
+          'organization_id = {:organizationId} && instance_id = {:instanceId} && remote_jid = {:jid}',
           '-created',
           1,
           0,
-          { organizationId: organizationId, jid: remoteJid },
+          { organizationId, instanceId: instance.id, jid: remoteJid },
         )
         if (records.length > 0) {
           contact = records[0]
@@ -184,7 +185,11 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
       $app.saveNoValidate(contact)
 
       try {
-        $app.findFirstRecordByData('whatsapp_messages', 'message_id', messageId)
+        $app.findFirstRecordByFilter(
+          'whatsapp_messages',
+          'organization_id = {:organizationId} && instance_id = {:instanceId} && message_id = {:messageId}',
+          { organizationId, instanceId: instance.id, messageId },
+        )
       } catch (_) {
         const msgsCol = $app.findCollectionByNameOrId('whatsapp_messages')
         const msgRecord = new Record(msgsCol)

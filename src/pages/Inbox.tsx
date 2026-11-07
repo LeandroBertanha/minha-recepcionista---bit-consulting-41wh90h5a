@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import pb from '@/lib/pocketbase/client'
 import {
   getContacts,
@@ -7,8 +7,10 @@ import {
   getInstances,
   logoutInstance,
   toggleContactAgent,
+  isRecordFromInstance,
 } from '@/services/whatsapp'
 import { useRealtime } from '@/hooks/use-realtime'
+import { useAuth } from '@/hooks/use-auth'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import {
@@ -61,6 +63,12 @@ type InboxProps = {
 }
 
 export default function Inbox({ organizationId, onConnectionSetup, initialContactId }: InboxProps) {
+  const { user } = useAuth()
+  const userId = user?.id
+  const scopeKey = `${userId || ''}:${organizationId}`
+  const currentScope = useRef(scopeKey)
+  const mounted = useRef(false)
+  currentScope.current = scopeKey
   const [contacts, setContacts] = useState<any[]>([])
   const [filteredContacts, setFilteredContacts] = useState<any[]>([])
   const [search, setSearch] = useState('')
@@ -70,6 +78,9 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
   const [loadingContacts, setLoadingContacts] = useState(true)
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [instance, setInstance] = useState<any>(null)
+  const instanceId = instance?.id
+  const currentInstanceId = useRef(instanceId)
+  currentInstanceId.current = instanceId
 
   // File states
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -91,6 +102,32 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
   const scrollRef = useRef<HTMLDivElement>(null)
   const isFirstLoadRef = useRef(true)
   const { toast } = useToast()
+
+  const cancelRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.onstop = null
+      recorder.stop()
+      recorder.stream.getTracks().forEach((track) => track.stop())
+    }
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current)
+    setIsRecording(false)
+    setAudioBlob(null)
+    setAudioPreviewUrl((url) => {
+      if (url) URL.revokeObjectURL(url)
+      return null
+    })
+    setRecordingTime(0)
+    audioChunksRef.current = []
+  }, [])
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      cancelRecording()
+    }
+  }, [cancelRecording])
 
   const sortMessagesList = (msgs: any[]) => {
     return [...msgs].sort((a, b) => {
@@ -114,29 +151,15 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
 
   useEffect(() => {
     let cancelled = false
-    setLoadingContacts(true)
-    setInstance(null)
-    setContacts([])
-    setFilteredContacts([])
-    setSelectedContact(null)
-    setMessages([])
-
+    if (!userId) return
     const init = async () => {
       try {
-        const [insts, data] = await Promise.all([
-          getInstances(organizationId),
-          getContacts(organizationId),
-        ])
-        if (cancelled) return
-
-        setInstance(insts[0] || null)
-        setContacts(data)
-        setFilteredContacts(data)
-
-        if (initialContactId) {
-          const contact = data.find((c) => c.id === initialContactId)
-          if (contact) setSelectedContact(contact)
-        }
+        const insts = await getInstances(organizationId)
+        if (cancelled || currentScope.current !== scopeKey) return
+        const ownInstance = insts.find(
+          (record) => record.user_id === userId && record.organization_id === organizationId,
+        )
+        setInstance(ownInstance || null)
       } catch (e) {
         if (cancelled) return
         console.error(e)
@@ -146,14 +169,50 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
           description: 'Não foi possível carregar os dados da sua empresa. Tente novamente.',
         })
       } finally {
-        if (!cancelled) setLoadingContacts(false)
+        if (!cancelled && currentScope.current === scopeKey) setLoadingContacts(false)
       }
     }
     init()
     return () => {
       cancelled = true
     }
-  }, [organizationId, initialContactId, toast])
+  }, [organizationId, scopeKey, toast, userId])
+
+  useEffect(() => {
+    let cancelled = false
+    setContacts([])
+    setFilteredContacts([])
+    setSelectedContact(null)
+    setMessages([])
+    setText('')
+    clearFile()
+    cancelRecording()
+    if (!instanceId) {
+      setLoadingContacts(false)
+      return
+    }
+
+    setLoadingContacts(true)
+    getContacts(instanceId, organizationId)
+      .then((data) => {
+        if (cancelled || currentScope.current !== scopeKey) return
+        setContacts(data)
+        setFilteredContacts(data)
+        if (initialContactId) {
+          const contact = data.find((record) => record.id === initialContactId)
+          if (contact) setSelectedContact(contact)
+        }
+      })
+      .catch((error) => {
+        if (!cancelled && currentScope.current === scopeKey) console.error(error)
+      })
+      .finally(() => {
+        if (!cancelled && currentScope.current === scopeKey) setLoadingContacts(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [instanceId, organizationId, initialContactId, scopeKey, cancelRecording])
 
   useEffect(() => {
     let cancelled = false
@@ -171,69 +230,103 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
       cancelled = true
       clearInterval(interval)
     }
-  }, [])
+  }, [userId])
 
-  useRealtime('whatsapp_instances', async (event) => {
-    if (event.record.organization_id !== organizationId) return
-    try {
-      const insts = await getInstances(organizationId)
-      setInstance(insts[0] || null)
-    } catch (e) {
-      console.error('Failed to refresh WhatsApp instance', e)
-    }
-  })
+  useRealtime(
+    'whatsapp_instances',
+    async (event) => {
+      if (event.record.user_id !== userId || event.record.organization_id !== organizationId) return
+      try {
+        const insts = await getInstances(organizationId)
+        if (currentScope.current !== scopeKey) return
+        setInstance(
+          insts.find(
+            (record) => record.user_id === userId && record.organization_id === organizationId,
+          ) || null,
+        )
+      } catch (e) {
+        console.error('Failed to refresh WhatsApp instance', e)
+      }
+    },
+    !!userId,
+    scopeKey,
+  )
 
-  useRealtime('whatsapp_contacts', (e) => {
-    if (e.record.organization_id !== organizationId) return
-    setContacts((prev) => {
-      if (e.action === 'create') {
-        if (prev.find((c) => c.id === e.record.id)) return prev
-        return [e.record, ...prev]
-      } else if (e.action === 'update') {
-        return prev.map((c) => (c.id === e.record.id ? e.record : c))
-      } else if (e.action === 'delete') {
-        return prev.filter((c) => c.id !== e.record.id)
-      }
-      return prev
-    })
-    setSelectedContact((prev: any) => {
-      if (prev && prev.id === e.record.id) {
-        return e.action === 'delete' ? null : { ...prev, ...e.record }
-      }
-      return prev
-    })
-  })
+  useRealtime(
+    'whatsapp_contacts',
+    (e) => {
+      if (!isRecordFromInstance(e.record, instanceId, organizationId)) return
+      setContacts((prev) => {
+        if (e.action === 'create') {
+          if (prev.find((c) => c.id === e.record.id)) return prev
+          return [e.record, ...prev]
+        } else if (e.action === 'update') {
+          return prev.map((c) => (c.id === e.record.id ? e.record : c))
+        } else if (e.action === 'delete') {
+          return prev.filter((c) => c.id !== e.record.id)
+        }
+        return prev
+      })
+      setSelectedContact((prev: any) => {
+        if (prev && prev.id === e.record.id) {
+          return e.action === 'delete' ? null : { ...prev, ...e.record }
+        }
+        return prev
+      })
+    },
+    !!instanceId,
+    `${scopeKey}:${instanceId || ''}`,
+  )
 
   const selectedContactId = selectedContact?.id
 
-  useRealtime('whatsapp_messages', (e) => {
-    if (e.record.organization_id !== organizationId) return
-    if (selectedContactId && e.record.contact_id === selectedContactId) {
-      if (e.action === 'create') {
-        setMessages((prev) => {
-          if (prev.find((m) => m.id === e.record.id)) return prev
-          return sortMessagesList([...prev, e.record])
-        })
-      } else if (e.action === 'update') {
-        setMessages((prev) =>
-          sortMessagesList(prev.map((m) => (m.id === e.record.id ? e.record : m))),
-        )
-      } else if (e.action === 'delete') {
-        setMessages((prev) => prev.filter((m) => m.id !== e.record.id))
+  useRealtime(
+    'whatsapp_messages',
+    (e) => {
+      if (!isRecordFromInstance(e.record, instanceId, organizationId)) return
+      if (selectedContactId && e.record.contact_id === selectedContactId) {
+        if (e.action === 'create') {
+          setMessages((prev) => {
+            if (prev.find((m) => m.id === e.record.id)) return prev
+            return sortMessagesList([...prev, e.record])
+          })
+        } else if (e.action === 'update') {
+          setMessages((prev) =>
+            sortMessagesList(prev.map((m) => (m.id === e.record.id ? e.record : m))),
+          )
+        } else if (e.action === 'delete') {
+          setMessages((prev) => prev.filter((m) => m.id !== e.record.id))
+        }
       }
-    }
-  })
+    },
+    !!instanceId,
+    `${scopeKey}:${instanceId || ''}`,
+  )
 
   useEffect(() => {
-    if (selectedContactId) {
-      setMessages([])
-      isFirstLoadRef.current = true
-      loadMessages(selectedContactId)
-      clearFile()
-    } else {
-      setMessages([])
+    let cancelled = false
+    setMessages([])
+    clearFile()
+    if (!selectedContactId || !instanceId) {
+      setLoadingMessages(false)
+      return
     }
-  }, [selectedContactId])
+    setLoadingMessages(true)
+    isFirstLoadRef.current = true
+    getMessages(selectedContactId, instanceId)
+      .then((data) => {
+        if (!cancelled && currentScope.current === scopeKey) setMessages(sortMessagesList(data))
+      })
+      .catch((error) => {
+        if (!cancelled && currentScope.current === scopeKey) console.error(error)
+      })
+      .finally(() => {
+        if (!cancelled && currentScope.current === scopeKey) setLoadingMessages(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedContactId, instanceId, scopeKey])
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -257,8 +350,13 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
   }, [search, contacts])
 
   const startRecording = async () => {
+    const recordingScope = scopeKey
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      if (!mounted.current || currentScope.current !== recordingScope) {
+        stream.getTracks().forEach((track) => track.stop())
+        return
+      }
       const mediaRecorder = new MediaRecorder(stream)
       mediaRecorderRef.current = mediaRecorder
       audioChunksRef.current = []
@@ -305,19 +403,6 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
     }
   }
 
-  const cancelRecording = () => {
-    if (isRecording) {
-      stopRecording()
-    }
-    setAudioBlob(null)
-    if (audioPreviewUrl) {
-      URL.revokeObjectURL(audioPreviewUrl)
-      setAudioPreviewUrl(null)
-    }
-    setRecordingTime(0)
-    audioChunksRef.current = []
-  }
-
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60)
       .toString()
@@ -326,21 +411,16 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
     return `${m}:${s}`
   }
 
-  const loadMessages = async (contactId: string) => {
-    setLoadingMessages(true)
-    try {
-      const msgs = await getMessages(contactId)
-      setMessages(sortMessagesList(msgs))
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoadingMessages(false)
-    }
-  }
-
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     if ((!text.trim() && !selectedFile && !audioBlob) || !selectedContact) return
+    if (
+      instance?.status !== 'connected' ||
+      !isRecordFromInstance(selectedContact, instanceId, organizationId)
+    )
+      return
+    const sendingScope = scopeKey
+    const sendingInstanceId = instanceId
 
     let sendType = selectedFile ? fileType : 'text'
     let fileToSend: File | undefined = selectedFile || undefined
@@ -416,6 +496,13 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
         })
       }
 
+      if (
+        !mounted.current ||
+        pb.authStore.record?.id !== userId ||
+        currentScope.current !== sendingScope ||
+        currentInstanceId.current !== sendingInstanceId
+      )
+        return
       const res = await sendMessage(selectedContact.id, {
         text: textToSend,
         file: fileToSend,
@@ -424,6 +511,12 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
         instance_id: selectedContact.instance_id,
         remote_jid: selectedContact.remote_jid,
       })
+      if (
+        !mounted.current ||
+        currentScope.current !== sendingScope ||
+        currentInstanceId.current !== sendingInstanceId
+      )
+        return
 
       const createdMsg = res?.message || res
       if (createdMsg && createdMsg.id) {
@@ -439,6 +532,7 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
         )
       }
     } catch (error) {
+      if (!mounted.current || currentScope.current !== sendingScope) return
       console.error(error)
       setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m)))
     }
@@ -452,7 +546,8 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
   }
 
   const handleToggleAgent = async () => {
-    if (!selectedContact) return
+    if (!selectedContact || !isRecordFromInstance(selectedContact, instanceId, organizationId))
+      return
     const newStatus = !selectedContact.agent_paused
     try {
       setSelectedContact((prev: any) => ({ ...prev, agent_paused: newStatus }))
@@ -460,10 +555,12 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
         prev.map((c) => (c.id === selectedContact.id ? { ...c, agent_paused: newStatus } : c)),
       )
       await toggleContactAgent(selectedContact.id, newStatus)
+      if (!mounted.current || currentScope.current !== scopeKey) return
       toast({
         title: newStatus ? 'IA pausada para este contato' : 'IA reativada para este contato',
       })
-    } catch (err) {
+    } catch (_err) {
+      if (!mounted.current || currentScope.current !== scopeKey) return
       setSelectedContact((prev: any) => ({ ...prev, agent_paused: !newStatus }))
       setContacts((prev) =>
         prev.map((c) => (c.id === selectedContact.id ? { ...c, agent_paused: !newStatus } : c)),
@@ -473,10 +570,14 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
   }
 
   const handleDisconnect = async () => {
+    if (!instance || instance.user_id !== userId || instance.organization_id !== organizationId)
+      return
     try {
       await logoutInstance()
+      if (!mounted.current || currentScope.current !== scopeKey) return
       toast({ title: 'WhatsApp desconectado com sucesso' })
-    } catch (e) {
+    } catch (_e) {
+      if (!mounted.current || currentScope.current !== scopeKey) return
       toast({ variant: 'destructive', title: 'Erro ao desconectar WhatsApp' })
     }
   }

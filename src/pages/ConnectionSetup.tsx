@@ -13,6 +13,7 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 import {
   getInstances,
   getIntegrationStatus,
+  ensureOwnInstance,
   fetchInstanceQR,
   logoutInstance,
   type IntegrationStatus,
@@ -23,49 +24,87 @@ import { useToast } from '@/hooks/use-toast'
 import { RefreshCw, QrCode, PowerOff, Smartphone, CheckCircle2 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 
-export default function ConnectionSetup() {
+export default function ConnectionSetup({ organizationId }: { organizationId: string }) {
   const [instance, setInstance] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
   const [integration, setIntegration] = useState<IntegrationStatus | null>(null)
   const [connectionError, setConnectionError] = useState('')
-  const autoQrTriggered = useRef(false)
+  const autoQrTriggered = useRef('')
+  const loadVersion = useRef(0)
+  const mounted = useRef(false)
   const { user } = useAuth()
   const { toast } = useToast()
+  const userId = user?.id
+  const scopeKey = `${userId || ''}:${organizationId}`
+  const currentScope = useRef(scopeKey)
+  currentScope.current = scopeKey
 
   const loadInstance = useCallback(async () => {
+    const version = ++loadVersion.current
     try {
+      if (!userId) return
       const [instances, integrationStatus] = await Promise.all([
-        getInstances(),
+        getInstances(organizationId),
         getIntegrationStatus(),
       ])
+      if (!mounted.current || currentScope.current !== scopeKey || version !== loadVersion.current)
+        return
       setIntegration(integrationStatus)
-      if (instances.length > 0) {
-        setInstance(instances[0])
+      setConnectionError('')
+      const ownInstance = instances.find(
+        (record) => record.user_id === userId && record.organization_id === organizationId,
+      )
+      if (ownInstance && integrationStatus.instance.id === ownInstance.id) {
+        const remoteState = integrationStatus.provider?.remoteState
+        const status =
+          remoteState === 'open'
+            ? 'connected'
+            : remoteState === 'connecting'
+              ? 'connecting'
+              : remoteState === 'close'
+                ? 'disconnected'
+                : ownInstance.status
+        setInstance({ ...ownInstance, status })
       } else {
-        setInstance(null)
+        setInstance(ownInstance || null)
       }
     } catch (e) {
+      if (!mounted.current || currentScope.current !== scopeKey || version !== loadVersion.current)
+        return
       console.error('Failed to load instance:', e)
+      setInstance(null)
       setIntegration(null)
       setConnectionError(
         'Não foi possível carregar a conexão. Clique em Atualizar para tentar novamente.',
       )
     } finally {
-      setLoading(false)
+      if (mounted.current && currentScope.current === scopeKey && version === loadVersion.current)
+        setLoading(false)
     }
-  }, [])
+  }, [organizationId, scopeKey, userId])
 
   useEffect(() => {
+    mounted.current = true
+    autoQrTriggered.current = ''
+    setInstance(null)
+    setIntegration(null)
+    setConnectionError('')
+    setLoading(true)
     loadInstance()
+    return () => {
+      mounted.current = false
+    }
   }, [loadInstance])
 
   useRealtime(
     'whatsapp_instances',
-    () => {
+    (event) => {
+      if (event.record.user_id !== userId || event.record.organization_id !== organizationId) return
       loadInstance()
     },
-    !!user,
+    !!userId,
+    scopeKey,
   )
 
   const handleRefresh = () => {
@@ -75,11 +114,18 @@ export default function ConnectionSetup() {
 
   const handleConnect = useCallback(
     async (silent = false) => {
-      if (!instance || !integration?.ready) return
+      if (
+        !instance ||
+        instance.user_id !== userId ||
+        instance.organization_id !== organizationId ||
+        !integration?.ready
+      )
+        return
       setActionLoading(true)
+      setConnectionError('')
       try {
         const result = await fetchInstanceQR(instance.id)
-        setConnectionError('')
+        if (!mounted.current || currentScope.current !== scopeKey) return
         setInstance((current: any) =>
           current?.id === instance.id
             ? { ...current, status: result.status, qrcode: result.qrcode }
@@ -94,32 +140,70 @@ export default function ConnectionSetup() {
           })
         }
       } catch (e: any) {
-        setConnectionError(e.response?.message || e.message || 'Não foi possível gerar o QR Code.')
+        if (!mounted.current || currentScope.current !== scopeKey) return
+        const message = e.response?.message || e.message || 'Não foi possível gerar o QR Code.'
+        setConnectionError(message)
         toast({
           title: 'Erro ao gerar QR Code',
-          description: e.message || 'Erro na Evolution API',
+          description: message,
           variant: 'destructive',
         })
       } finally {
-        setActionLoading(false)
+        if (mounted.current && currentScope.current === scopeKey) setActionLoading(false)
       }
     },
-    [instance, integration?.ready, toast],
+    [instance, integration?.ready, organizationId, scopeKey, toast, userId],
   )
+
+  const handlePrepare = async () => {
+    if (!userId || !integration?.ready) return
+    setActionLoading(true)
+    setConnectionError('')
+    try {
+      const result = await ensureOwnInstance(organizationId)
+      if (!mounted.current || currentScope.current !== scopeKey) return
+      if (
+        result.instance?.user_id !== userId ||
+        result.instance?.organization_id !== organizationId
+      ) {
+        throw new Error('Não foi possível preparar a conexão da sua conta.')
+      }
+      const ownInstance = result.instance
+      autoQrTriggered.current = `${scopeKey}:${ownInstance.id}`
+      setInstance(ownInstance)
+      if (ownInstance.status !== 'connected') {
+        const qr = await fetchInstanceQR(ownInstance.id)
+        if (!mounted.current || currentScope.current !== scopeKey) return
+        setInstance((current: any) =>
+          current?.id === ownInstance.id
+            ? { ...current, status: qr.status, qrcode: qr.qrcode }
+            : current,
+        )
+      }
+    } catch (e: any) {
+      if (!mounted.current || currentScope.current !== scopeKey) return
+      setConnectionError(
+        e.response?.message || e.message || 'Não foi possível preparar seu WhatsApp.',
+      )
+    } finally {
+      if (mounted.current && currentScope.current === scopeKey) setActionLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (
       !loading &&
+      !actionLoading &&
       integration?.ready &&
       instance &&
       instance.status !== 'connected' &&
       !instance.qrcode &&
-      !autoQrTriggered.current
+      autoQrTriggered.current !== `${scopeKey}:${instance.id}`
     ) {
-      autoQrTriggered.current = true
+      autoQrTriggered.current = `${scopeKey}:${instance.id}`
       handleConnect(true)
     }
-  }, [loading, instance, integration?.ready, handleConnect])
+  }, [loading, actionLoading, instance, integration?.ready, handleConnect, scopeKey])
 
   useEffect(() => {
     if (!instance?.id || instance.status !== 'connecting') return
@@ -135,18 +219,23 @@ export default function ConnectionSetup() {
   }, [instance?.id, instance?.status, loadInstance])
 
   const handleDisconnect = async () => {
+    if (!instance || instance.user_id !== userId || instance.organization_id !== organizationId)
+      return
     setActionLoading(true)
     try {
       await logoutInstance()
+      if (!mounted.current || currentScope.current !== scopeKey) return
+      await loadInstance()
       toast({ title: 'Desconectado com sucesso' })
     } catch (e: any) {
+      if (!mounted.current || currentScope.current !== scopeKey) return
       toast({
         title: 'Erro ao desconectar instância',
         description: e.message || 'Erro na Evolution API',
         variant: 'destructive',
       })
     } finally {
-      setActionLoading(false)
+      if (mounted.current && currentScope.current === scopeKey) setActionLoading(false)
     }
   }
 
@@ -263,13 +352,19 @@ export default function ConnectionSetup() {
                 </div>
                 <div className="space-y-1.5">
                   <AlertTitle className="text-base font-medium text-slate-900">
-                    Nenhuma Instância Encontrada
+                    Conecte o seu WhatsApp
                   </AlertTitle>
                   <AlertDescription className="text-sm text-slate-500 leading-relaxed">
-                    Você ainda não possui uma instância do WhatsApp associada à sua conta. Por
-                    favor, entre em contato com o suporte ou administrador do sistema para
-                    provisionar a sua instância dedicada.
+                    Sua conta ainda não possui um WhatsApp conectado. Prepare sua conexão e escaneie
+                    o QR Code com o seu celular. Cada usuário conecta o próprio aparelho.
                   </AlertDescription>
+                  <Button
+                    onClick={handlePrepare}
+                    disabled={actionLoading || !integration?.ready}
+                    className="mt-4"
+                  >
+                    {actionLoading ? 'Preparando...' : 'Preparar meu WhatsApp'}
+                  </Button>
                 </div>
               </div>
             </Alert>
@@ -288,7 +383,7 @@ export default function ConnectionSetup() {
                     </CardTitle>
                   </div>
                   <CardDescription className="text-xs text-slate-500">
-                    Instância de comunicação
+                    WhatsApp deste usuário
                   </CardDescription>
                 </div>
                 <div className="flex justify-end shrink-0">{getStatusBadge(instance.status)}</div>

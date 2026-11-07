@@ -12,6 +12,19 @@ onRecordAfterCreateSuccess(async (e) => {
   }
 
   const contact = $app.findRecordById('whatsapp_contacts', contactId)
+  const messageInstance = $app.findRecordById('whatsapp_instances', instanceId)
+  const sessionUserId = messageInstance.getString('user_id')
+  if (
+    contact.getString('instance_id') !== instanceId ||
+    contact.getString('organization_id') !== organizationId ||
+    messageInstance.getString('organization_id') !== organizationId ||
+    msg.getString('user_id') !== sessionUserId
+  ) {
+    $app
+      .logger()
+      .error('AI message rejected due to WhatsApp session mismatch', 'message_id', msg.id)
+    return e.next()
+  }
   if (contact.getBool('agent_paused')) return e.next()
 
   // 7-Second Message Debounce
@@ -28,10 +41,11 @@ onRecordAfterCreateSuccess(async (e) => {
   try {
     const msgs = $app.findRecordsByFilter(
       'whatsapp_messages',
-      `contact_id='${contactId}' && direction='in'`,
+      'contact_id = {:contactId} && instance_id = {:instanceId} && organization_id = {:organizationId} && direction = "in"',
       '-created',
       1,
       0,
+      { contactId, instanceId, organizationId },
     )
     if (msgs.length > 0) newestMsg = msgs[0]
   } catch (err) {}
@@ -45,10 +59,11 @@ onRecordAfterCreateSuccess(async (e) => {
   try {
     agents = $app.findRecordsByFilter(
       'ai_agents',
-      `organization_id='${organizationId}' && instance_id='${instanceId}' && active=true`,
+      'organization_id = {:organizationId} && instance_id = {:instanceId} && user_id = {:userId} && active = true',
       '-created',
       1,
       0,
+      { organizationId, instanceId, userId: sessionUserId },
     )
   } catch (_) {
     return e.next()
@@ -74,10 +89,11 @@ onRecordAfterCreateSuccess(async (e) => {
     try {
       history = $app.findRecordsByFilter(
         'whatsapp_messages',
-        `contact_id='${contactId}'`,
+        'contact_id = {:contactId} && instance_id = {:instanceId} && organization_id = {:organizationId}',
         '-created',
         20,
         0,
+        { contactId, instanceId, organizationId },
       )
     } catch (e) {}
 
@@ -182,7 +198,7 @@ onRecordAfterCreateSuccess(async (e) => {
       timeout: 30,
     })
 
-    const instance = $app.findRecordById('whatsapp_instances', agent.getString('instance_id'))
+    const instance = messageInstance
     const instanceName = instance.getString('instance_name')
 
     let reply = ''

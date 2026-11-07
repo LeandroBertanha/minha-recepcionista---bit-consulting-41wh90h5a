@@ -11,25 +11,58 @@ export type IntegrationStatus = {
     secretConfigured: boolean
   }
   instance: {
+    id?: string
+    userId?: string
     status: string
+  }
+  provider?: {
+    remoteState?: string
   }
 }
 
-export const getInstances = (organizationId?: string) =>
-  pb.collection('whatsapp_instances').getFullList({
-    sort: '-created',
-    filter: organizationId
-      ? pb.filter('organization_id = {:organizationId}', { organizationId })
-      : '',
-  })
+const requireUserId = () => {
+  const userId = pb.authStore.record?.id
+  if (!userId) throw new Error('Entre na sua conta para acessar o WhatsApp.')
+  return userId
+}
 
-export const getContacts = (organizationId?: string) =>
-  pb.collection('whatsapp_contacts').getFullList({
-    sort: '-last_message_at',
-    filter: organizationId
-      ? pb.filter('organization_id = {:organizationId}', { organizationId })
-      : '',
+export const getInstances = (organizationId?: string) => {
+  const userId = requireUserId()
+  return pb.collection('whatsapp_instances').getFullList({
+    sort: '-created',
+    filter: pb.filter(
+      'user_id = {:userId}' + (organizationId ? ' && organization_id = {:organizationId}' : ''),
+      { userId, organizationId },
+    ),
   })
+}
+
+export const getContacts = (instanceId: string, organizationId?: string) => {
+  const userId = requireUserId()
+  if (!instanceId) throw new Error('Selecione a conexão do seu WhatsApp.')
+  return pb.collection('whatsapp_contacts').getFullList({
+    sort: '-last_message_at',
+    filter: pb.filter(
+      'instance_id = {:instanceId} && instance_id.user_id = {:userId}' +
+        (organizationId ? ' && organization_id = {:organizationId}' : ''),
+      { instanceId, userId, organizationId },
+    ),
+  })
+}
+
+export const isRecordFromInstance = (
+  record: { instance_id?: string; organization_id?: string },
+  instanceId: string | undefined,
+  organizationId: string,
+) => !!instanceId && record.instance_id === instanceId && record.organization_id === organizationId
+
+export const ensureOwnInstance = (organizationId: string) => {
+  requireUserId()
+  return pb.send<{ instance: any; created: boolean }>('/backend/v1/instance/ensure', {
+    method: 'POST',
+    body: { organization_id: organizationId },
+  })
+}
 
 export const getIntegrationStatus = () =>
   pb.send<IntegrationStatus>('/backend/v1/integration/status', { method: 'GET' })
@@ -37,10 +70,17 @@ export const getIntegrationStatus = () =>
 export const toggleContactAgent = (contactId: string, paused: boolean) =>
   pb.collection('whatsapp_contacts').update(contactId, { agent_paused: paused })
 
-export const getMessages = (contactId: string) =>
-  pb
-    .collection('whatsapp_messages')
-    .getFullList({ filter: `contact_id = '${contactId}'`, sort: 'sent_at' })
+export const getMessages = (contactId: string, instanceId: string) => {
+  const userId = requireUserId()
+  if (!contactId || !instanceId) throw new Error('Selecione uma conversa do seu WhatsApp.')
+  return pb.collection('whatsapp_messages').getFullList({
+    filter: pb.filter(
+      'contact_id = {:contactId} && instance_id = {:instanceId} && instance_id.user_id = {:userId}',
+      { contactId, instanceId, userId },
+    ),
+    sort: 'sent_at',
+  })
+}
 
 export const fetchInstanceQR = (instanceId: string) =>
   pb.send<{ status: string; qrcode: string; pending?: boolean }>(

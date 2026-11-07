@@ -476,7 +476,7 @@ function DashboardApp() {
             {active === 'agents' && <AgentsView />}
             {active === 'knowledge' && <KnowledgeView />}
             {active === 'integrations' ? (
-              <ConnectionSetup />
+              <ConnectionSetup organizationId={tenant.id} />
             ) : (
               !['dashboard', 'inbox', 'attention', 'agents', 'knowledge'].includes(active) && (
                 <ModuleView id={active} />
@@ -1096,7 +1096,7 @@ function AuthenticatedApp() {
     )
   }
 
-  if (user) return <DashboardApp />
+  if (user) return <DashboardApp key={user.id} />
 
   return (
     <div className={loginDark ? 'dark' : ''}>

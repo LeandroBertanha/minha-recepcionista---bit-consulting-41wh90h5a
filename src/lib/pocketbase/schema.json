@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-06T22:09:01.674Z",
+  "generatedAt": "2026-11-07T21:13:23.414Z",
   "collections": [
     {
       "name": "users",
@@ -48,8 +48,8 @@
       "name": "whatsapp_instances",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != '' && user_id = @request.auth.id",
-        "view": "@request.auth.id != '' && user_id = @request.auth.id",
+        "list": "@request.auth.id != '' && organization_id.status = 'active' && @collection.organization_members:whatsapp_member.organization_id ?= organization_id && @collection.organization_members:whatsapp_member.user_id ?= @request.auth.id && @collection.organization_members:whatsapp_member.status ?= 'active' && user_id = @request.auth.id",
+        "view": "@request.auth.id != '' && organization_id.status = 'active' && @collection.organization_members:whatsapp_member.organization_id ?= organization_id && @collection.organization_members:whatsapp_member.user_id ?= @request.auth.id && @collection.organization_members:whatsapp_member.status ?= 'active' && user_id = @request.auth.id",
         "create": null,
         "update": null,
         "delete": null
@@ -94,19 +94,29 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "organization_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "organizations"
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_wi_name ON whatsapp_instances (instance_name)"]
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_wi_name ON whatsapp_instances (instance_name)",
+        "CREATE UNIQUE INDEX idx_whatsapp_instances_org_user ON whatsapp_instances (organization_id, user_id)"
+      ]
     },
     {
       "name": "whatsapp_contacts",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != '' && user_id = @request.auth.id",
-        "view": "@request.auth.id != '' && user_id = @request.auth.id",
-        "create": "@request.auth.id != '' && user_id = @request.auth.id",
-        "update": "@request.auth.id != '' && user_id = @request.auth.id",
-        "delete": "@request.auth.id != '' && user_id = @request.auth.id"
+        "list": "@request.auth.id != '' && organization_id.status = 'active' && @collection.organization_members:whatsapp_member.organization_id ?= organization_id && @collection.organization_members:whatsapp_member.user_id ?= @request.auth.id && @collection.organization_members:whatsapp_member.status ?= 'active' && instance_id.user_id = @request.auth.id && instance_id.organization_id = organization_id",
+        "view": "@request.auth.id != '' && organization_id.status = 'active' && @collection.organization_members:whatsapp_member.organization_id ?= organization_id && @collection.organization_members:whatsapp_member.user_id ?= @request.auth.id && @collection.organization_members:whatsapp_member.status ?= 'active' && instance_id.user_id = @request.auth.id && instance_id.organization_id = organization_id",
+        "create": null,
+        "update": "@request.auth.id != '' && organization_id.status = 'active' && @collection.organization_members:whatsapp_member.organization_id ?= organization_id && @collection.organization_members:whatsapp_member.user_id ?= @request.auth.id && @collection.organization_members:whatsapp_member.status ?= 'active' && instance_id.user_id = @request.auth.id && instance_id.organization_id = organization_id && (@collection.organization_members:whatsapp_member.role ?= 'owner' || @collection.organization_members:whatsapp_member.role ?= 'admin' || @collection.organization_members:whatsapp_member.role ?= 'supervisor' || @collection.organization_members:whatsapp_member.role ?= 'agent') && @request.body.organization_id:changed = false && @request.body.user_id:changed = false && @request.body.instance_id:changed = false",
+        "delete": "@request.auth.id != '' && organization_id.status = 'active' && @collection.organization_members:whatsapp_member.organization_id ?= organization_id && @collection.organization_members:whatsapp_member.user_id ?= @request.auth.id && @collection.organization_members:whatsapp_member.status ?= 'active' && instance_id.user_id = @request.auth.id && instance_id.organization_id = organization_id && (@collection.organization_members:whatsapp_member.role ?= 'owner' || @collection.organization_members:whatsapp_member.role ?= 'admin')"
       },
       "fields": [
         {
@@ -179,22 +189,30 @@
           "required": false,
           "system": false,
           "selectValues": ["in_conversation", "waiting", "resolved", "lost"]
+        },
+        {
+          "name": "organization_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "organizations"
         }
       ],
       "indexes": [
         "CREATE INDEX idx_wc_jid ON whatsapp_contacts (user_id, remote_jid)",
-        "CREATE INDEX `idx_wc_status` ON `whatsapp_contacts` (status)"
+        "CREATE INDEX `idx_wc_status` ON `whatsapp_contacts` (status)",
+        "CREATE INDEX idx_whatsapp_contacts_instance_jid ON whatsapp_contacts (instance_id, remote_jid)"
       ]
     },
     {
       "name": "whatsapp_messages",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != '' && user_id = @request.auth.id",
-        "view": "@request.auth.id != '' && user_id = @request.auth.id",
-        "create": "@request.auth.id != '' && user_id = @request.auth.id",
-        "update": "@request.auth.id != '' && user_id = @request.auth.id",
-        "delete": "@request.auth.id != '' && user_id = @request.auth.id"
+        "list": "@request.auth.id != '' && organization_id.status = 'active' && @collection.organization_members:whatsapp_member.organization_id ?= organization_id && @collection.organization_members:whatsapp_member.user_id ?= @request.auth.id && @collection.organization_members:whatsapp_member.status ?= 'active' && instance_id.user_id = @request.auth.id && instance_id.organization_id = organization_id && contact_id.instance_id = instance_id && contact_id.organization_id = organization_id",
+        "view": "@request.auth.id != '' && organization_id.status = 'active' && @collection.organization_members:whatsapp_member.organization_id ?= organization_id && @collection.organization_members:whatsapp_member.user_id ?= @request.auth.id && @collection.organization_members:whatsapp_member.status ?= 'active' && instance_id.user_id = @request.auth.id && instance_id.organization_id = organization_id && contact_id.instance_id = instance_id && contact_id.organization_id = organization_id",
+        "create": null,
+        "update": null,
+        "delete": null
       },
       "fields": [
         {
@@ -293,19 +311,28 @@
           "type": "text",
           "required": false,
           "system": false
+        },
+        {
+          "name": "organization_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "organizations"
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_wm_id ON whatsapp_messages (message_id)"]
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_whatsapp_messages_instance_message ON whatsapp_messages (instance_id, message_id)"
+      ]
     },
     {
       "name": "ai_agents",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id != '' && user_id = @request.auth.id",
-        "view": "@request.auth.id != '' && user_id = @request.auth.id",
-        "create": "@request.auth.id != '' && user_id = @request.auth.id",
-        "update": "@request.auth.id != '' && user_id = @request.auth.id",
-        "delete": "@request.auth.id != '' && user_id = @request.auth.id"
+        "list": "@request.auth.id != '' && organization_id.status = 'active' && @collection.organization_members:whatsapp_member.organization_id ?= organization_id && @collection.organization_members:whatsapp_member.user_id ?= @request.auth.id && @collection.organization_members:whatsapp_member.status ?= 'active' && instance_id.user_id = @request.auth.id && instance_id.organization_id = organization_id && user_id = @request.auth.id",
+        "view": "@request.auth.id != '' && organization_id.status = 'active' && @collection.organization_members:whatsapp_member.organization_id ?= organization_id && @collection.organization_members:whatsapp_member.user_id ?= @request.auth.id && @collection.organization_members:whatsapp_member.status ?= 'active' && instance_id.user_id = @request.auth.id && instance_id.organization_id = organization_id && user_id = @request.auth.id",
+        "create": "@request.auth.id != '' && organization_id.status = 'active' && @collection.organization_members:whatsapp_member.organization_id ?= organization_id && @collection.organization_members:whatsapp_member.user_id ?= @request.auth.id && @collection.organization_members:whatsapp_member.status ?= 'active' && instance_id.user_id = @request.auth.id && instance_id.organization_id = organization_id && user_id = @request.auth.id && (@collection.organization_members:whatsapp_member.role ?= 'owner' || @collection.organization_members:whatsapp_member.role ?= 'admin' || @collection.organization_members:whatsapp_member.role ?= 'supervisor' || @collection.organization_members:whatsapp_member.role ?= 'agent')",
+        "update": "@request.auth.id != '' && organization_id.status = 'active' && @collection.organization_members:whatsapp_member.organization_id ?= organization_id && @collection.organization_members:whatsapp_member.user_id ?= @request.auth.id && @collection.organization_members:whatsapp_member.status ?= 'active' && instance_id.user_id = @request.auth.id && instance_id.organization_id = organization_id && user_id = @request.auth.id && (@collection.organization_members:whatsapp_member.role ?= 'owner' || @collection.organization_members:whatsapp_member.role ?= 'admin' || @collection.organization_members:whatsapp_member.role ?= 'supervisor' || @collection.organization_members:whatsapp_member.role ?= 'agent') && @request.body.organization_id:changed = false && @request.body.user_id:changed = false && @request.body.instance_id:changed = false",
+        "delete": "@request.auth.id != '' && organization_id.status = 'active' && @collection.organization_members:whatsapp_member.organization_id ?= organization_id && @collection.organization_members:whatsapp_member.user_id ?= @request.auth.id && @collection.organization_members:whatsapp_member.status ?= 'active' && instance_id.user_id = @request.auth.id && instance_id.organization_id = organization_id && user_id = @request.auth.id && (@collection.organization_members:whatsapp_member.role ?= 'owner' || @collection.organization_members:whatsapp_member.role ?= 'admin')"
       },
       "fields": [
         {
@@ -372,6 +399,123 @@
           "type": "text",
           "required": true,
           "system": false
+        },
+        {
+          "name": "organization_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "organizations"
+        }
+      ],
+      "indexes": []
+    },
+    {
+      "name": "organizations",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (owner_id = @request.auth.id || (organization_members_via_organization_id.user_id ?= @request.auth.id && organization_members_via_organization_id.status ?= 'active'))",
+        "view": "@request.auth.id != '' && (owner_id = @request.auth.id || (organization_members_via_organization_id.user_id ?= @request.auth.id && organization_members_via_organization_id.status ?= 'active'))",
+        "create": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "update": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "delete": "@request.auth.id != '' && owner_id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "slug",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "owner_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onUpdate"]
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["active", "inactive"]
+        }
+      ],
+      "indexes": []
+    },
+    {
+      "name": "organization_members",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (user_id = @request.auth.id || organization_id.owner_id = @request.auth.id)",
+        "view": "@request.auth.id != '' && (user_id = @request.auth.id || organization_id.owner_id = @request.auth.id)",
+        "create": "@request.auth.id != '' && organization_id.owner_id = @request.auth.id",
+        "update": "@request.auth.id != '' && organization_id.owner_id = @request.auth.id && @request.body.organization_id:changed = false && @request.body.user_id:changed = false",
+        "delete": "@request.auth.id != '' && organization_id.owner_id = @request.auth.id && role != 'owner'"
+      },
+      "fields": [
+        {
+          "name": "organization_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "organizations"
+        },
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "role",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["owner", "admin", "supervisor", "agent", "viewer"]
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["active", "invited", "disabled"]
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onUpdate"]
         }
       ],
       "indexes": []

@@ -10,24 +10,23 @@ routerAdd(
       return e.notFoundError('Instance not found')
     }
 
+    if (instance.getString('user_id') !== e.auth?.id) {
+      return e.forbiddenError('Access denied')
+    }
+
     const organizationId = instance.getString('organization_id')
     let hasOrganizationAccess = false
     try {
       const organization = $app.findRecordById('organizations', organizationId)
-      hasOrganizationAccess = organization.getString('owner_id') === e.auth?.id
+      const membership = $app.findFirstRecordByFilter(
+        'organization_members',
+        'organization_id = {:organizationId} && user_id = {:userId} && status = "active"',
+        { organizationId, userId: e.auth.id },
+      )
+      const role = membership.getString('role')
+      hasOrganizationAccess =
+        organization.getString('status') === 'active' && (role === 'owner' || role === 'admin')
     } catch (_) {}
-
-    if (!hasOrganizationAccess) {
-      try {
-        const membership = $app.findFirstRecordByFilter(
-          'organization_members',
-          'organization_id = {:organizationId} && user_id = {:userId} && status = "active"',
-          { organizationId: organizationId, userId: e.auth?.id || '' },
-        )
-        const role = membership.getString('role')
-        hasOrganizationAccess = role === 'owner' || role === 'admin'
-      } catch (_) {}
-    }
 
     if (!hasOrganizationAccess) {
       return e.forbiddenError('Access denied')

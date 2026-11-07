@@ -1,4 +1,4 @@
-// Cria uma instância por organização e provisiona a integração na Evolution API.
+// Cria uma instância por usuário da organização e preserva as sessões existentes.
 onRecordAfterCreateSuccess(
   (e) => {
     // Safely get the collection name to avoid TypeError
