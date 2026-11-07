@@ -8,6 +8,8 @@ routerAdd(
     const webhookSecretConfigured = Boolean($secrets.get('EVOLUTION_WEBHOOK_SECRET'))
 
     let instanceStatus = 'missing'
+    let instanceId = ''
+    let instanceUserId = ''
     let provider = null
     try {
       const membership = $app.findFirstRecordByFilter(
@@ -15,11 +17,21 @@ routerAdd(
         'user_id = {:userId} && status = "active"',
         { userId: e.auth.id },
       )
-      const instance = $app.findFirstRecordByData(
+      const organizationId = membership.getString('organization_id')
+      const organization = $app.findRecordById('organizations', organizationId)
+      if (organization.getString('status') !== 'active') throw new Error('Inactive organization')
+      const instance = $app.findFirstRecordByFilter(
         'whatsapp_instances',
-        'organization_id',
-        membership.getString('organization_id'),
+        'organization_id = {:organizationId} && user_id = {:userId}',
+        { organizationId, userId: e.auth.id },
       )
+      if (
+        instance.getString('user_id') !== e.auth.id ||
+        instance.getString('organization_id') !== organizationId
+      )
+        throw new Error('Instance ownership mismatch')
+      instanceId = instance.id
+      instanceUserId = e.auth.id
       instanceStatus = instance.getString('status') || 'pending'
       const role = membership.getString('role')
       if (role === 'owner' || role === 'admin') {
@@ -126,6 +138,8 @@ routerAdd(
         secretConfigured: webhookSecretConfigured,
       },
       instance: {
+        id: instanceId,
+        userId: instanceUserId,
         status: instanceStatus,
       },
       provider: provider,
