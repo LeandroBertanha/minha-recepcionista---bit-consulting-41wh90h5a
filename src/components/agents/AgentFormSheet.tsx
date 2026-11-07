@@ -111,7 +111,20 @@ export function AgentFormSheet({ open, onOpenChange, agent }: AgentFormSheetProp
         return
       }
 
-      const data = { ...values, user_id: user.id, instance_id: instanceId }
+      const instance = instances.find((item) => item.id === instanceId)
+      const organizationId = instance?.organization_id
+
+      if (!organizationId) {
+        toast.error('A instância ainda não está vinculada a uma empresa.')
+        return
+      }
+
+      const data = {
+        ...values,
+        user_id: user.id,
+        organization_id: organizationId,
+        instance_id: instanceId,
+      }
 
       if (agent) {
         await updateAiAgent(agent.id, data)
