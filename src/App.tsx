@@ -1,8 +1,9 @@
-import { Toaster } from './components/ui/toaster'
-import ConnectionSetup from './pages/ConnectionSetup'
 import { useEffect, useMemo, useState } from 'react'
 import { AuthProvider, useAuth } from './hooks/use-auth'
 import pb from './lib/pocketbase/client'
+import ConnectionSetup from './pages/ConnectionSetup'
+import Inbox from './pages/Inbox'
+import { Toaster } from './components/ui/toaster'
 import type { LucideIcon } from 'lucide-react'
 import {
   AlertTriangle,
@@ -12,7 +13,6 @@ import {
   BookOpen,
   Bot,
   CalendarDays,
-  CheckCircle2,
   ChevronDown,
   Clock3,
   FileText,
@@ -22,14 +22,11 @@ import {
   MessageCircle,
   Moon,
   MoreHorizontal,
-  Paperclip,
   Plug,
   Plus,
   Search,
-  Send,
   Settings,
   ShieldCheck,
-  Smile,
   Sparkles,
   Sun,
   UploadCloud,
@@ -57,7 +54,7 @@ type NavItem = { id: ViewId; label: string; icon: LucideIcon; badge?: string }
 
 const navigation: NavItem[] = [
   { id: 'dashboard', label: 'Visão geral', icon: LayoutDashboard },
-  { id: 'inbox', label: 'Conversas', icon: MessageCircle, badge: '12' },
+  { id: 'inbox', label: 'Conversas', icon: MessageCircle },
   { id: 'attention', label: 'Precisa de você', icon: BellRing, badge: '4' },
   { id: 'agents', label: 'Recepcionistas', icon: Bot },
   { id: 'knowledge', label: 'Conhecimento', icon: BookOpen },
@@ -80,49 +77,6 @@ const metrics = [
   { label: 'Resolvidas pela IA', value: '78,6%', change: '+6,2%', icon: Sparkles, tone: 'green' },
   { label: 'Transferidas', value: '18,3%', change: '-2,1%', icon: UserCheck, tone: 'yellow' },
   { label: 'SLA cumprido', value: '96,8%', change: '+1,8%', icon: Clock3, tone: 'blue' },
-]
-
-const conversations = [
-  {
-    name: 'Marina Souza',
-    text: 'Gostaria de remarcar para sexta...',
-    time: 'Agora',
-    status: 'IA atendendo',
-    unread: 2,
-    initials: 'MS',
-  },
-  {
-    name: 'Carlos Eduardo',
-    text: 'Preciso falar com uma pessoa.',
-    time: '2 min',
-    status: 'Aguardando humano',
-    unread: 1,
-    initials: 'CE',
-  },
-  {
-    name: 'Ana Paula',
-    text: 'Obrigada pelo atendimento!',
-    time: '8 min',
-    status: 'Resolvido',
-    unread: 0,
-    initials: 'AP',
-  },
-  {
-    name: 'Rafael Lima',
-    text: 'Qual o valor da avaliação?',
-    time: '14 min',
-    status: 'IA atendendo',
-    unread: 0,
-    initials: 'RL',
-  },
-  {
-    name: 'Beatriz Nunes',
-    text: 'Tenho urgência no atendimento.',
-    time: '22 min',
-    status: 'Prioridade alta',
-    unread: 0,
-    initials: 'BN',
-  },
 ]
 
 const attentionRows = [
@@ -258,7 +212,6 @@ function DashboardApp() {
   const [active, setActive] = useState<ViewId>('dashboard')
   const [dark, setDark] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [selectedConversation, setSelectedConversation] = useState(0)
   const [tenant, setTenant] = useState<{ id: string; name: string; role: string } | null>(null)
   const [tenantLoading, setTenantLoading] = useState(true)
   const [tenantError, setTenantError] = useState('')
@@ -514,7 +467,10 @@ function DashboardApp() {
           <div className="p-4 sm:p-6 lg:p-8">
             {active === 'dashboard' && <Dashboard companyName={tenant.name} />}
             {active === 'inbox' && (
-              <InboxView selected={selectedConversation} onSelect={setSelectedConversation} />
+              <Inbox
+                organizationId={tenant.id}
+                onConnectionSetup={() => selectView('integrations')}
+              />
             )}
             {active === 'attention' && <AttentionView />}
             {active === 'agents' && <AgentsView />}
@@ -742,189 +698,6 @@ function Dashboard({ companyName }: { companyName: string }) {
           </div>
         </article>
       </section>
-    </div>
-  )
-}
-
-function InboxView({
-  selected,
-  onSelect,
-}: {
-  selected: number
-  onSelect: (index: number) => void
-}) {
-  const current = conversations[selected]
-  return (
-    <div className="mx-auto grid h-[calc(100vh-144px)] max-w-[1600px] overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-white/10 dark:bg-[#0b1c22] xl:grid-cols-[360px_1fr_320px]">
-      <section className="flex min-h-0 flex-col border-r border-slate-100 dark:border-white/10">
-        <div className="border-b border-slate-100 p-4 dark:border-white/10">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-bold">Conversas</h2>
-              <p className="text-xs text-slate-400">12 em andamento</p>
-            </div>
-            <button className="rounded-lg bg-[#12bfc3] p-2 text-white">
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="relative mt-3">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-10 text-sm outline-none dark:border-white/10 dark:bg-white/[0.04]"
-              placeholder="Buscar conversa..."
-            />
-            <Filter className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          </div>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {conversations.map((item, index) => (
-            <button
-              key={item.name}
-              onClick={() => onSelect(index)}
-              className={
-                'flex w-full gap-3 border-b border-slate-100 p-4 text-left transition dark:border-white/[0.06] ' +
-                (selected === index
-                  ? 'bg-[#12bfc3]/[0.08]'
-                  : 'hover:bg-slate-50 dark:hover:bg-white/[0.03]')
-              }
-            >
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#12bfc3]/15 text-sm font-bold text-[#0a9da0]">
-                {item.initials}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="truncate text-sm font-bold">{item.name}</p>
-                  <span className="shrink-0 text-[10px] text-slate-400">{item.time}</span>
-                </div>
-                <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
-                  {item.text}
-                </p>
-                <div className="mt-2 flex items-center justify-between">
-                  <span className="text-[10px] font-semibold text-[#0aa6aa]">{item.status}</span>
-                  {item.unread > 0 && (
-                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#12bfc3] px-1 text-[10px] font-bold text-white">
-                      {item.unread}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      </section>
-      <section className="flex min-h-0 flex-col">
-        <div className="flex items-center justify-between border-b border-slate-100 p-4 dark:border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#43ae37]/15 font-bold text-[#43ae37]">
-              {current.initials}
-            </div>
-            <div>
-              <p className="font-bold">{current.name}</p>
-              <p className="text-xs text-slate-400">WhatsApp • online agora</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-white/10">
-              Pausar IA
-            </button>
-            <button className="rounded-lg bg-[#12bfc3] px-3 py-2 text-xs font-bold text-white">
-              Assumir atendimento
-            </button>
-          </div>
-        </div>
-        <div className="flex-1 space-y-5 overflow-y-auto bg-slate-50/60 p-5 dark:bg-black/10">
-          <div className="mx-auto w-fit rounded-full bg-white px-3 py-1 text-[10px] font-semibold text-slate-400 shadow-sm dark:bg-white/10">
-            Hoje, 10:32
-          </div>
-          <div className="max-w-[72%] rounded-2xl rounded-tl-sm bg-white p-3.5 text-sm shadow-sm dark:bg-white/[0.07]">
-            Olá! Gostaria de saber se vocês têm horário disponível para esta semana.
-          </div>
-          <div className="ml-auto max-w-[72%] rounded-2xl rounded-tr-sm bg-[#12bfc3] p-3.5 text-sm text-white shadow-sm">
-            <div className="mb-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-white/70">
-              <Sparkles className="h-3 w-3" /> Lia • IA
-            </div>
-            Olá, {current.name.split(' ')[0]}! Temos alguns horários disponíveis. Você prefere manhã
-            ou tarde?
-          </div>
-          <div className="max-w-[72%] rounded-2xl rounded-tl-sm bg-white p-3.5 text-sm shadow-sm dark:bg-white/[0.07]">
-            Prefiro no período da tarde, de preferência na sexta.
-          </div>
-          <div className="ml-auto max-w-[72%] rounded-2xl rounded-tr-sm bg-[#12bfc3] p-3.5 text-sm text-white shadow-sm">
-            <div className="mb-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-white/70">
-              <Sparkles className="h-3 w-3" /> Lia • IA
-            </div>
-            Perfeito. Encontrei 14h e 16h30 na sexta-feira. Qual funciona melhor para você?
-          </div>
-        </div>
-        <div className="border-t border-slate-100 p-4 dark:border-white/10">
-          <div className="flex items-end gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-white/10 dark:bg-white/[0.04]">
-            <button className="rounded-lg p-2 text-slate-400 hover:bg-white dark:hover:bg-white/10">
-              <Paperclip className="h-5 w-5" />
-            </button>
-            <textarea
-              className="max-h-28 min-h-[40px] flex-1 resize-none bg-transparent px-1 py-2 text-sm outline-none"
-              placeholder="Digite uma mensagem..."
-            />
-            <button className="rounded-lg p-2 text-slate-400 hover:bg-white dark:hover:bg-white/10">
-              <Smile className="h-5 w-5" />
-            </button>
-            <button className="rounded-lg bg-[#12bfc3] p-2.5 text-white">
-              <Send className="h-5 w-5" />
-            </button>
-          </div>
-          <p className="mt-2 text-center text-[10px] text-slate-400">
-            A IA está ativa e acompanha esta conversa
-          </p>
-        </div>
-      </section>
-      <aside className="hidden min-h-0 overflow-y-auto border-l border-slate-100 p-5 dark:border-white/10 xl:block">
-        <div className="text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#12bfc3]/15 text-xl font-bold text-[#0a9da0]">
-            {current.initials}
-          </div>
-          <h3 className="mt-3 font-bold">{current.name}</h3>
-          <p className="text-xs text-slate-400">Cliente desde maio de 2026</p>
-        </div>
-        <div className="mt-6 space-y-5">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Resumo automático
-            </p>
-            <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-              Cliente deseja agendar atendimento para sexta-feira à tarde. Preferência ainda não
-              confirmada entre 14h e 16h30.
-            </p>
-          </div>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Intenção
-            </p>
-            <div className="mt-2 flex gap-2">
-              <StatusPill tone="info">Agendamento</StatusPill>
-              <StatusPill tone="success">Positivo</StatusPill>
-            </div>
-          </div>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Informações coletadas
-            </p>
-            <ul className="mt-2 space-y-2 text-sm text-slate-600 dark:text-slate-300">
-              <li className="flex gap-2">
-                <CheckCircle2 className="h-4 w-4 text-[#43ae37]" /> Período: tarde
-              </li>
-              <li className="flex gap-2">
-                <CheckCircle2 className="h-4 w-4 text-[#43ae37]" /> Dia: sexta-feira
-              </li>
-              <li className="flex gap-2">
-                <Clock3 className="h-4 w-4 text-amber-500" /> Horário pendente
-              </li>
-            </ul>
-          </div>
-          <button className="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-bold dark:border-white/10">
-            Ver histórico completo
-          </button>
-        </div>
-      </aside>
     </div>
   )
 }
