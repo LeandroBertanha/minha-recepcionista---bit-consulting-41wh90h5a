@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
 import {
   Card,
   CardHeader,
@@ -28,11 +28,12 @@ export default function ConnectionSetup() {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
   const [integration, setIntegration] = useState<IntegrationStatus | null>(null)
+  const [connectionError, setConnectionError] = useState('')
   const autoQrTriggered = useRef(false)
   const { user } = useAuth()
   const { toast } = useToast()
 
-  const loadInstance = async () => {
+  const loadInstance = useCallback(async () => {
     try {
       const [instances, integrationStatus] = await Promise.all([
         getInstances(),
@@ -47,14 +48,17 @@ export default function ConnectionSetup() {
     } catch (e) {
       console.error('Failed to load instance:', e)
       setIntegration(null)
+      setConnectionError(
+        'Não foi possível carregar a conexão. Clique em Atualizar para tentar novamente.',
+      )
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     loadInstance()
-  }, [])
+  }, [loadInstance])
 
   useRealtime(
     'whatsapp_instances',
@@ -69,31 +73,44 @@ export default function ConnectionSetup() {
     loadInstance()
   }
 
-  const handleConnect = async (silent = false) => {
-    if (!instance || !integration?.ready) return
-    setActionLoading(true)
-    try {
-      await fetchInstanceQR(instance.id)
-      if (!silent) {
+  const handleConnect = useCallback(
+    async (silent = false) => {
+      if (!instance || !integration?.ready) return
+      setActionLoading(true)
+      try {
+        const result = await fetchInstanceQR(instance.id)
+        setConnectionError('')
+        setInstance((current: any) =>
+          current?.id === instance.id
+            ? { ...current, status: result.status, qrcode: result.qrcode }
+            : current,
+        )
+        if (!silent) {
+          toast({
+            title: 'QR Code solicitado',
+            description: result.qrcode
+              ? 'Escaneie o código usando Aparelhos conectados no WhatsApp.'
+              : 'A geração está em andamento. Aguarde ou tente novamente.',
+          })
+        }
+      } catch (e: any) {
+        setConnectionError(e.response?.message || e.message || 'Não foi possível gerar o QR Code.')
         toast({
-          title: 'QR Code solicitado',
-          description: 'Por favor, aguarde o novo QR code ser gerado.',
+          title: 'Erro ao gerar QR Code',
+          description: e.message || 'Erro na Evolution API',
+          variant: 'destructive',
         })
+      } finally {
+        setActionLoading(false)
       }
-    } catch (e: any) {
-      toast({
-        title: 'Erro ao gerar QR Code',
-        description: e.message || 'Erro na Evolution API',
-        variant: 'destructive',
-      })
-    } finally {
-      setActionLoading(false)
-    }
-  }
+    },
+    [instance, integration?.ready, toast],
+  )
 
   useEffect(() => {
     if (
       !loading &&
+      integration?.ready &&
       instance &&
       instance.status !== 'connected' &&
       !instance.qrcode &&
@@ -102,7 +119,20 @@ export default function ConnectionSetup() {
       autoQrTriggered.current = true
       handleConnect(true)
     }
-  }, [loading, instance])
+  }, [loading, instance, integration?.ready, handleConnect])
+
+  useEffect(() => {
+    if (!instance?.id || instance.status !== 'connecting') return
+    let attempts = 0
+    const timer = window.setInterval(() => {
+      if (++attempts > 24) {
+        window.clearInterval(timer)
+        return
+      }
+      loadInstance()
+    }, 5000)
+    return () => window.clearInterval(timer)
+  }, [instance?.id, instance?.status, loadInstance])
 
   const handleDisconnect = async () => {
     setActionLoading(true)
@@ -208,6 +238,12 @@ export default function ConnectionSetup() {
         description="Vincule seu dispositivo para começar a enviar e receber mensagens de forma profissional e limpa."
       />
       <div className="flex flex-col items-start md:items-center mx-auto w-full px-6 md:px-10 pb-16">
+        {connectionError && (
+          <Alert variant="destructive" role="alert" className="mb-6 w-full max-w-md">
+            <AlertTitle>Não foi possível concluir a conexão</AlertTitle>
+            <AlertDescription>{connectionError}</AlertDescription>
+          </Alert>
+        )}
         {integration && !integration.ready ? (
           <Alert className="mb-6 w-full max-w-md border-amber-200 bg-amber-50 text-amber-950">
             <AlertTitle>Integração aguardando configuração</AlertTitle>
@@ -351,17 +387,19 @@ export default function ConnectionSetup() {
                   {instance.status !== 'connected' && (
                     <Button
                       onClick={() => handleConnect()}
-                      disabled={
-                        actionLoading || instance.status === 'connecting' || !integration?.ready
-                      }
+                      disabled={actionLoading || !integration?.ready}
                       className="w-full sm:w-auto bg-brand-500 hover:bg-brand-600 text-white shadow-sm shadow-brand-500/20 font-medium px-5 text-sm h-9"
                     >
-                      {actionLoading || instance.status === 'connecting' ? (
+                      {actionLoading ? (
                         <RefreshCw className="h-3.5 w-3.5 mr-2 animate-spin" />
                       ) : (
                         <QrCode className="h-3.5 w-3.5 mr-2" />
                       )}
-                      {instance.status === 'connecting' ? 'Conectando...' : 'Gerar QR Code'}
+                      {actionLoading
+                        ? 'Gerando...'
+                        : instance.qrcode
+                          ? 'Renovar QR Code'
+                          : 'Gerar QR Code'}
                     </Button>
                   )}
                 </div>
