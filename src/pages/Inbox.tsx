@@ -36,7 +36,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useToast } from '@/hooks/use-toast'
-import { useNavigate, useLocation } from 'react-router-dom'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -55,7 +54,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-export default function Inbox() {
+type InboxProps = {
+  organizationId: string
+  onConnectionSetup: () => void
+  initialContactId?: string
+}
+
+export default function Inbox({ organizationId, onConnectionSetup, initialContactId }: InboxProps) {
   const [contacts, setContacts] = useState<any[]>([])
   const [filteredContacts, setFilteredContacts] = useState<any[]>([])
   const [search, setSearch] = useState('')
@@ -86,8 +91,6 @@ export default function Inbox() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const isFirstLoadRef = useRef(true)
   const { toast } = useToast()
-  const navigate = useNavigate()
-  const location = useLocation()
 
   const sortMessagesList = (msgs: any[]) => {
     return [...msgs].sort((a, b) => {
@@ -110,29 +113,47 @@ export default function Inbox() {
   }, [audioPreviewUrl])
 
   useEffect(() => {
-    const init = async () => {
-      const insts = await getInstances()
-      if (insts.length > 0) {
-        setInstance(insts[0])
-      }
+    let cancelled = false
+    setLoadingContacts(true)
+    setInstance(null)
+    setContacts([])
+    setFilteredContacts([])
+    setSelectedContact(null)
+    setMessages([])
 
+    const init = async () => {
       try {
-        const data = await getContacts()
+        const [insts, data] = await Promise.all([
+          getInstances(organizationId),
+          getContacts(organizationId),
+        ])
+        if (cancelled) return
+
+        setInstance(insts[0] || null)
         setContacts(data)
         setFilteredContacts(data)
 
-        if (location.state?.contactId) {
-          const contact = data.find((c) => c.id === location.state.contactId)
+        if (initialContactId) {
+          const contact = data.find((c) => c.id === initialContactId)
           if (contact) setSelectedContact(contact)
         }
       } catch (e) {
+        if (cancelled) return
         console.error(e)
+        toast({
+          variant: 'destructive',
+          title: 'Erro ao carregar conversas',
+          description: 'Não foi possível carregar os dados da sua empresa. Tente novamente.',
+        })
       } finally {
-        setLoadingContacts(false)
+        if (!cancelled) setLoadingContacts(false)
       }
     }
     init()
-  }, [])
+    return () => {
+      cancelled = true
+    }
+  }, [organizationId, initialContactId, toast])
 
   useEffect(() => {
     let cancelled = false
@@ -152,14 +173,18 @@ export default function Inbox() {
     }
   }, [])
 
-  useRealtime('whatsapp_instances', async () => {
-    const insts = await getInstances()
-    if (insts.length > 0) {
-      setInstance(insts[0])
+  useRealtime('whatsapp_instances', async (event) => {
+    if (event.record.organization_id !== organizationId) return
+    try {
+      const insts = await getInstances(organizationId)
+      setInstance(insts[0] || null)
+    } catch (e) {
+      console.error('Failed to refresh WhatsApp instance', e)
     }
   })
 
   useRealtime('whatsapp_contacts', (e) => {
+    if (e.record.organization_id !== organizationId) return
     setContacts((prev) => {
       if (e.action === 'create') {
         if (prev.find((c) => c.id === e.record.id)) return prev
@@ -182,6 +207,7 @@ export default function Inbox() {
   const selectedContactId = selectedContact?.id
 
   useRealtime('whatsapp_messages', (e) => {
+    if (e.record.organization_id !== organizationId) return
     if (selectedContactId && e.record.contact_id === selectedContactId) {
       if (e.action === 'create') {
         setMessages((prev) => {
@@ -597,7 +623,7 @@ export default function Inbox() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] md:h-screen w-full overflow-hidden bg-zinc-50/60">
+    <div className="flex h-[calc(100dvh-160px)] min-h-[420px] w-full overflow-hidden bg-zinc-50/60 dark:bg-[#0b1c22]">
       {/* Sidebar Contacts */}
       <div
         className={cn(
@@ -657,7 +683,7 @@ export default function Inbox() {
             ) : (
               <Button
                 size="sm"
-                onClick={() => navigate('/connection-setup')}
+                onClick={onConnectionSetup}
                 className="h-8 px-3 text-xs font-medium bg-brand-500 hover:bg-brand-600 text-white shadow-sm shadow-brand-500/20 shrink-0"
               >
                 Conectar WhatsApp
