@@ -1,3 +1,4 @@
+import { Toaster } from './components/ui/toaster'
 import ConnectionSetup from './pages/ConnectionSetup'
 import { useEffect, useMemo, useState } from 'react'
 import { AuthProvider, useAuth } from './hooks/use-auth'
@@ -1423,6 +1424,7 @@ function App() {
   return (
     <AuthProvider>
       <AuthenticatedApp />
+      <Toaster />
     </AuthProvider>
   )
 }
