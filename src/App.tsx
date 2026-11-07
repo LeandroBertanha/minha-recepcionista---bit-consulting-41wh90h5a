@@ -1,3 +1,4 @@
+import ConnectionSetup from './pages/ConnectionSetup'
 import { useEffect, useMemo, useState } from 'react'
 import { AuthProvider, useAuth } from './hooks/use-auth'
 import pb from './lib/pocketbase/client'
@@ -517,8 +518,12 @@ function DashboardApp() {
             {active === 'attention' && <AttentionView />}
             {active === 'agents' && <AgentsView />}
             {active === 'knowledge' && <KnowledgeView />}
-            {!['dashboard', 'inbox', 'attention', 'agents', 'knowledge'].includes(active) && (
-              <ModuleView id={active} />
+            {active === 'integrations' ? (
+              <ConnectionSetup />
+            ) : (
+              !['dashboard', 'inbox', 'attention', 'agents', 'knowledge'].includes(active) && (
+                <ModuleView id={active} />
+              )
             )}
           </div>
         </main>
