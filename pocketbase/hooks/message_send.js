@@ -19,7 +19,30 @@ routerAdd(
       throw new ForbiddenError('Access denied')
     }
 
-    if (contact.getString('user_id') !== e.auth?.id) {
+    const organizationId = contact.getString('organization_id')
+    let hasOrganizationAccess = false
+    let membershipRole = ''
+
+    if (organizationId) {
+      try {
+        const organization = $app.findRecordById('organizations', organizationId)
+        hasOrganizationAccess = organization.getString('owner_id') === e.auth?.id
+      } catch (_) {}
+
+      if (!hasOrganizationAccess) {
+        try {
+          const membership = $app.findFirstRecordByFilter(
+            'organization_members',
+            'organization_id = {:organizationId} && user_id = {:userId} && status = "active"',
+            { organizationId: organizationId, userId: e.auth?.id || '' },
+          )
+          membershipRole = membership.getString('role')
+          hasOrganizationAccess = membershipRole !== 'viewer'
+        } catch (_) {}
+      }
+    }
+
+    if (!hasOrganizationAccess) {
       throw new ForbiddenError('Access denied')
     }
 
@@ -28,6 +51,9 @@ routerAdd(
       instance = $app.findRecordById('whatsapp_instances', contact.getString('instance_id'))
     } catch (_) {
       throw new InternalServerError('Instance not found')
+    }
+    if (instance.getString('organization_id') !== organizationId) {
+      throw new ForbiddenError('Access denied')
     }
     const instanceName = instance.getString('instance_name')
 
@@ -127,6 +153,7 @@ routerAdd(
     const msgsCol = $app.findCollectionByNameOrId('whatsapp_messages')
     const msgRecord = new Record(msgsCol)
     msgRecord.set('user_id', e.auth.id)
+    msgRecord.set('organization_id', organizationId)
     msgRecord.set('instance_id', instance.id)
     msgRecord.set('contact_id', contact.id)
     msgRecord.set('remote_jid', contact.getString('remote_jid'))
