@@ -106,10 +106,16 @@ routerAdd(
       }
       $app.saveNoValidate(instance)
     } catch (err) {
-      $app.logger().error('Evolution QR transport error')
+      const diagnostic = String(err)
+        .split(evoKey)
+        .join('[redacted]')
+        .split(webhookSecret)
+        .join('[redacted]')
+      $app.logger().error('Evolution QR transport error', 'error', diagnostic)
       return e.json(502, {
         message:
           'Não foi possível acessar a Evolution API. Verifique o servidor e tente novamente.',
+        diagnostic,
       })
     }
     return e.json(200, {
