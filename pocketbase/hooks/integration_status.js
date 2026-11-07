@@ -9,7 +9,16 @@ routerAdd(
 
     let instanceStatus = 'missing'
     try {
-      const instance = $app.findFirstRecordByData('whatsapp_instances', 'user_id', e.auth.id)
+      const membership = $app.findFirstRecordByFilter(
+        'organization_members',
+        'user_id = {:userId} && status = "active"',
+        { userId: e.auth.id },
+      )
+      const instance = $app.findFirstRecordByData(
+        'whatsapp_instances',
+        'organization_id',
+        membership.getString('organization_id'),
+      )
       instanceStatus = instance.getString('status') || 'pending'
     } catch (_) {}
 
