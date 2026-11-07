@@ -4,6 +4,12 @@ onRecordAfterCreateSuccess(async (e) => {
 
   const contactId = msg.getString('contact_id')
   const instanceId = msg.getString('instance_id')
+  const organizationId = msg.getString('organization_id')
+
+  if (!organizationId) {
+    $app.logger().error('Incoming message without organization', 'message_id', msg.id)
+    return e.next()
+  }
 
   const contact = $app.findRecordById('whatsapp_contacts', contactId)
   if (contact.getBool('agent_paused')) return e.next()
@@ -39,7 +45,7 @@ onRecordAfterCreateSuccess(async (e) => {
   try {
     agents = $app.findRecordsByFilter(
       'ai_agents',
-      `instance_id='${instanceId}' && active=true`,
+      `organization_id='${organizationId}' && instance_id='${instanceId}' && active=true`,
       '-created',
       1,
       0,
@@ -229,6 +235,7 @@ onRecordAfterCreateSuccess(async (e) => {
           const msgsCol = $app.findCollectionByNameOrId('whatsapp_messages')
           const msgRecord = new Record(msgsCol)
           msgRecord.set('user_id', contact.getString('user_id'))
+          msgRecord.set('organization_id', organizationId)
           msgRecord.set('instance_id', instance.id)
           msgRecord.set('contact_id', contact.id)
           msgRecord.set('remote_jid', contact.getString('remote_jid'))
@@ -253,6 +260,7 @@ onRecordAfterCreateSuccess(async (e) => {
       const msgsCol = $app.findCollectionByNameOrId('whatsapp_messages')
       const msgRecord = new Record(msgsCol)
       msgRecord.set('user_id', contact.getString('user_id'))
+      msgRecord.set('organization_id', organizationId)
       msgRecord.set('instance_id', instance.id)
       msgRecord.set('contact_id', contact.id)
       msgRecord.set('remote_jid', contact.getString('remote_jid'))
