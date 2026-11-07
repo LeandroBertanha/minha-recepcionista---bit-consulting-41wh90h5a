@@ -49,9 +49,13 @@ cronAdd('crm_status_updates', '*/1 * * * *', () => {
       let provider = 'openai'
       let apiKey = ''
       try {
-        const agent = $app.findFirstRecordByFilter('ai_agents', 'user_id = {:userId}', {
-          userId: contact.getString('user_id'),
-        })
+        const agent = $app.findFirstRecordByFilter(
+          'ai_agents',
+          'organization_id = {:organizationId}',
+          {
+            organizationId: contact.getString('organization_id'),
+          },
+        )
         provider = agent.getString('provider')
         apiKey = agent.getString('api_key')
       } catch (err) {}
