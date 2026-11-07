@@ -52,6 +52,36 @@ routerAdd(
                 config.headers?.['X-Bitzaap-Webhook-Secret'] ===
                 $secrets.get('EVOLUTION_WEBHOOK_SECRET'),
             }
+            const connection = $http.send({
+              url:
+                apiUrl +
+                '/instance/connectionState/' +
+                encodeURIComponent(instance.getString('instance_name')),
+              method: 'GET',
+              headers: { apikey: apiKey },
+              timeout: 5,
+            })
+            if (connection.statusCode === 200)
+              provider.remoteState = connection.json?.instance?.state || 'unknown'
+            const details = $http.send({
+              url:
+                apiUrl +
+                '/instance/fetchInstances?instanceName=' +
+                encodeURIComponent(instance.getString('instance_name')),
+              method: 'GET',
+              headers: { apikey: apiKey },
+              timeout: 5,
+            })
+            if (details.statusCode === 200 && Array.isArray(details.json)) {
+              const paired = details.json.find(
+                (item) => item.name === instance.getString('instance_name'),
+              )
+              provider.connectedNumberLast4 = String(paired?.ownerJid || '')
+                .split('@')[0]
+                .split(':')[0]
+                .replace(/\D/g, '')
+                .slice(-4)
+            }
             const history = $http.send({
               url:
                 apiUrl +
@@ -65,10 +95,15 @@ routerAdd(
             if (history.statusCode === 200 && history.json?.messages) {
               const messages = history.json.messages
               provider.messageCount = messages.total
+              const latest = (messages.records || [])[0]
+              provider.latestMessageTimestamp = latest?.messageTimestamp || null
+              provider.latestMessagePayloadType = typeof latest?.message
               provider.testMessageFound = (messages.records || []).some((message) => {
-                const content =
-                  message.message?.conversation || message.message?.extendedTextMessage?.text || ''
-                return content.indexOf('Teste Minha Recepcionista') !== -1
+                const payload = message.message?.ephemeralMessage?.message || message.message || {}
+                const content = (payload.conversation || payload.extendedTextMessage?.text || '')
+                  .trim()
+                  .toLowerCase()
+                return content === 'teste 2' || content.indexOf('teste minha recepcionista') !== -1
               })
             }
           }
