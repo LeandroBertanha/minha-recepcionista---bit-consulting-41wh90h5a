@@ -2,7 +2,7 @@
   "name": "bitzaap",
   "description": "Plataforma Bit Consulting para atendimento e automação no WhatsApp com IA",
   "private": true,
-  "version": "0.0.10",
+  "version": "0.0.11",
   "type": "module",
   "scripts": {
     "start": "vite dev",
