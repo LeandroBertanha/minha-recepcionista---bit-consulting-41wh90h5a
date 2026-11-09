@@ -1,4 +1,13 @@
-import { createContext, lazy, Suspense, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  lazy,
+  Suspense,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
 import { track } from '../analytics'
 
 const DiagnosticDialog = lazy(() => import('./DiagnosticDialog'))

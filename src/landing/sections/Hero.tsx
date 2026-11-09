@@ -46,12 +46,17 @@ function HeroChat() {
   return (
     <div className="w-[300px] rounded-[28px] border border-white/10 bg-[#EFEAE2]/95 p-3 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.7)] backdrop-blur sm:w-[330px]">
       <div className="mb-2 flex items-center justify-between px-1">
-        <p className="font-machine text-[10px] uppercase tracking-[0.14em] text-wa-deep">WhatsApp · 23:41</p>
+        <p className="font-machine text-[10px] uppercase tracking-[0.14em] text-wa-deep">
+          WhatsApp · 23:41
+        </p>
         <p className="flex items-center gap-1.5 font-machine text-[10px] uppercase tracking-[0.14em] text-neutral-500">
           <span className="h-1.5 w-1.5 rounded-full bg-wa" /> fora do expediente
         </p>
       </div>
-      <div className="flex h-[236px] flex-col justify-end gap-1.5 overflow-hidden" aria-live="polite">
+      <div
+        className="flex h-[236px] flex-col justify-end gap-1.5 overflow-hidden"
+        aria-live="polite"
+      >
         <AnimatePresence initial={false} mode="popLayout">
           {visible.map((m, i) => (
             <motion.div
@@ -66,7 +71,12 @@ function HeroChat() {
             </motion.div>
           ))}
           {typing && (
-            <motion.div key="typing" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            <motion.div
+              key="typing"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+            >
               <TypingBubble />
             </motion.div>
           )}
@@ -94,14 +104,26 @@ export function Hero() {
             </span>
           </h1>
           <p className="mt-7 max-w-[540px] text-[17px] leading-relaxed text-white/65">
-            Automatize seu atendimento, responda clientes, tire dúvidas, agende compromissos e transforme conversas em vendas
-            com um chatbot inteligente. Tudo em uma única plataforma.
+            Automatize seu atendimento, responda clientes, tire dúvidas, agende compromissos e
+            transforme conversas em vendas com um chatbot inteligente. Tudo em uma única plataforma.
           </p>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-            <CtaButton ctaId="hero_primary" position="hero" size="lg" onClick={() => open({ origin: 'hero' })}>
+            <CtaButton
+              ctaId="hero_primary"
+              position="hero"
+              size="lg"
+              onClick={() => open({ origin: 'hero' })}
+            >
               Quero automatizar meu WhatsApp
             </CtaButton>
-            <CtaButton ctaId="hero_secondary" position="hero" size="lg" variant="outline-light" icon={false} href="#como-funciona">
+            <CtaButton
+              ctaId="hero_secondary"
+              position="hero"
+              size="lg"
+              variant="outline-light"
+              icon={false}
+              href="#como-funciona"
+            >
               Ver como funciona
             </CtaButton>
           </div>

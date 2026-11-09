@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { animate, motion, useMotionTemplate, useMotionValue, useReducedMotion, useSpring, useTransform } from 'motion/react'
+import {
+  animate,
+  motion,
+  useMotionTemplate,
+  useMotionValue,
+  useReducedMotion,
+  useSpring,
+  useTransform,
+} from 'motion/react'
 import { Bot, UserRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -68,7 +76,11 @@ export function HeroReveal({
       onPointerEnter={() => interactive && radius.set(lensRadius)}
       onPointerLeave={() => interactive && !revealed && radius.set(0)}
       onPointerMove={handleMove}
-      className={cn('group relative isolate aspect-[3/4] w-full select-none overflow-hidden bg-ink', interactive && 'cursor-none', className)}
+      className={cn(
+        'group relative isolate aspect-[3/4] w-full select-none overflow-hidden bg-ink',
+        interactive && 'cursor-none',
+        className,
+      )}
     >
       <img
         src="/landing/hero-woman.jpg"
@@ -92,7 +104,13 @@ export function HeroReveal({
 
       <motion.div
         aria-hidden
-        style={{ left: ringLeft, top: ringTop, width: ringSize, height: ringSize, opacity: ringOpacity }}
+        style={{
+          left: ringLeft,
+          top: ringTop,
+          width: ringSize,
+          height: ringSize,
+          opacity: ringOpacity,
+        }}
         className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-wa/70 shadow-[0_0_60px_rgba(37,211,102,0.25)]"
       >
         <span className="absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-ink/80 px-2.5 py-1 font-machine text-[10px] uppercase tracking-[0.14em] text-wa backdrop-blur">
@@ -113,7 +131,11 @@ export function HeroReveal({
           aria-pressed={revealed}
           className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-ink/70 px-3.5 py-2 font-machine text-[11px] uppercase tracking-[0.12em] text-white backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wa"
         >
-          {revealed ? <UserRound className="h-3.5 w-3.5 text-wa" /> : <Bot className="h-3.5 w-3.5 text-wa" />}
+          {revealed ? (
+            <UserRound className="h-3.5 w-3.5 text-wa" />
+          ) : (
+            <Bot className="h-3.5 w-3.5 text-wa" />
+          )}
           {revealed ? 'Ver o atendimento humano' : 'Ver quem responde'}
         </button>
       )}

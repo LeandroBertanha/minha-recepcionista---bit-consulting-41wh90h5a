@@ -15,7 +15,17 @@ import { Bubble, PhoneFrame } from '../components/Phone'
 
 const SEGMENT = 1 / scenarios.length
 
-function ScrollBubble({ message, index, total, local }: { message: ChatMessage; index: number; total: number; local: MotionValue<number> }) {
+function ScrollBubble({
+  message,
+  index,
+  total,
+  local,
+}: {
+  message: ChatMessage
+  index: number
+  total: number
+  local: MotionValue<number>
+}) {
   const start = 0.01 + (index / (total + 1)) * 0.78
   const end = start + 0.12
   const opacity = useTransform(local, [start, end], [0, 1])
@@ -23,7 +33,10 @@ function ScrollBubble({ message, index, total, local }: { message: ChatMessage; 
   const y = useTransform(local, [start, end], [26, 0])
   const scale = useTransform(local, [start, end], [0.86, 1])
   return (
-    <motion.div style={{ opacity, z, y, scale, transformStyle: 'preserve-3d' }} className="origin-bottom">
+    <motion.div
+      style={{ opacity, z, y, scale, transformStyle: 'preserve-3d' }}
+      className="origin-bottom"
+    >
       <Bubble message={message} className="drop-shadow-[0_14px_18px_rgba(0,0,0,0.18)]" />
     </motion.div>
   )
@@ -31,13 +44,24 @@ function ScrollBubble({ message, index, total, local }: { message: ChatMessage; 
 
 function ScenarioScreen({ index, progress }: { index: number; progress: MotionValue<number> }) {
   const scenario = scenarios[index]
-  const local = useTransform(progress, (p) => Math.min(Math.max((p - index * SEGMENT) / SEGMENT, 0), 1))
+  const local = useTransform(progress, (p) =>
+    Math.min(Math.max((p - index * SEGMENT) / SEGMENT, 0), 1),
+  )
   const outcomeOpacity = useTransform(local, [0.82, 0.92], [0, 1])
   const outcomeZ = useTransform(local, [0.82, 0.95], [140, 20])
   return (
-    <div className="absolute inset-0 flex flex-col justify-end gap-2 px-2.5 pb-3" style={{ transformStyle: 'preserve-3d' }}>
+    <div
+      className="absolute inset-0 flex flex-col justify-end gap-2 px-2.5 pb-3"
+      style={{ transformStyle: 'preserve-3d' }}
+    >
       {scenario.messages.map((m, i) => (
-        <ScrollBubble key={i} message={m} index={i} total={scenario.messages.length} local={local} />
+        <ScrollBubble
+          key={i}
+          message={m}
+          index={i}
+          total={scenario.messages.length}
+          local={local}
+        />
       ))}
       <motion.div
         style={{ opacity: outcomeOpacity, z: outcomeZ }}
@@ -99,16 +123,28 @@ export function HowItWorks() {
     <section
       id="como-funciona"
       ref={sectionRef}
-      className={cn('relative overflow-x-clip bg-ink text-white', reduceMotion ? 'py-24' : 'h-[420vh]')}
+      className={cn(
+        'relative overflow-x-clip bg-ink text-white',
+        reduceMotion ? 'py-24' : 'h-[420vh]',
+      )}
       aria-label="Como funciona"
     >
-      <div className={cn('mx-auto max-w-7xl px-5 sm:px-8', !reduceMotion && 'sticky top-0 flex h-screen items-center')}>
+      <div
+        className={cn(
+          'mx-auto max-w-7xl px-5 sm:px-8',
+          !reduceMotion && 'sticky top-0 flex h-screen items-center',
+        )}
+      >
         <div className="grid w-full items-center gap-10 lg:grid-cols-[1fr_auto_0.8fr] lg:gap-14">
           <div className="max-w-xl">
-            <p className="font-machine text-[11px] uppercase tracking-[0.18em] text-wa">Como funciona</p>
+            <p className="font-machine text-[11px] uppercase tracking-[0.18em] text-wa">
+              Como funciona
+            </p>
             <h2 className="mt-4 font-landing text-[clamp(2rem,4.6vw,3.6rem)] font-semibold leading-[1.02] tracking-[-0.035em]">
               Da primeira mensagem até a conversão.{' '}
-              <span className="font-human text-[1.08em] font-normal italic tracking-[-0.01em] text-wa">Tudo automatizado.</span>
+              <span className="font-human text-[1.08em] font-normal italic tracking-[-0.01em] text-wa">
+                Tudo automatizado.
+              </span>
             </h2>
             <ol className="mt-8 hidden space-y-5 sm:block">
               {steps.map((step, i) => (
@@ -123,7 +159,10 @@ export function HowItWorks() {
             </ol>
           </div>
 
-          <div className="relative mx-auto -my-16 scale-[0.78] sm:my-0 sm:scale-100" style={{ perspective: 1400 }}>
+          <div
+            className="relative mx-auto -my-16 scale-[0.78] sm:my-0 sm:scale-100"
+            style={{ perspective: 1400 }}
+          >
             <motion.div
               aria-hidden
               style={{ scale: reduceMotion ? 1 : glowScale }}
@@ -145,7 +184,10 @@ export function HowItWorks() {
                     scenarios.map((_, i) => (
                       <div
                         key={scenarios[i].id}
-                        className={cn('absolute inset-0 transition-opacity duration-200', i === active ? 'opacity-100' : 'opacity-0')}
+                        className={cn(
+                          'absolute inset-0 transition-opacity duration-200',
+                          i === active ? 'opacity-100' : 'opacity-0',
+                        )}
                         style={{ transformStyle: 'preserve-3d' }}
                         aria-hidden={i !== active}
                       >
@@ -162,8 +204,12 @@ export function HowItWorks() {
                     className="pointer-events-none absolute -right-40 bottom-28 hidden rounded-2xl border border-white/15 bg-ink px-3.5 py-2.5 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.6)] sm:block"
                     style={{ transform: 'translateZ(60px)' }}
                   >
-                    <p className="font-machine text-[9.5px] uppercase tracking-[0.14em] text-white/40">Intenção detectada</p>
-                    <p className="mt-0.5 font-landing text-sm font-semibold text-white">{scenarios[active].label}</p>
+                    <p className="font-machine text-[9.5px] uppercase tracking-[0.14em] text-white/40">
+                      Intenção detectada
+                    </p>
+                    <p className="mt-0.5 font-landing text-sm font-semibold text-white">
+                      {scenarios[active].label}
+                    </p>
                   </div>
                   <div
                     aria-hidden
@@ -179,8 +225,14 @@ export function HowItWorks() {
           </div>
 
           <div className="lg:justify-self-end">
-            <p className="font-machine text-[11px] uppercase tracking-[0.18em] text-white/40">Situações reais</p>
-            <div role="tablist" aria-label="Cenários de atendimento" className="mt-4 flex flex-wrap gap-2 lg:flex-col lg:items-stretch">
+            <p className="font-machine text-[11px] uppercase tracking-[0.18em] text-white/40">
+              Situações reais
+            </p>
+            <div
+              role="tablist"
+              aria-label="Cenários de atendimento"
+              className="mt-4 flex flex-wrap gap-2 lg:flex-col lg:items-stretch"
+            >
               {scenarios.map((s, i) => (
                 <button
                   key={s.id}
@@ -190,11 +242,20 @@ export function HowItWorks() {
                   onClick={() => goTo(i)}
                   className={cn(
                     'flex items-center justify-between gap-6 rounded-full border px-4 py-2.5 text-left font-landing text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wa lg:rounded-2xl lg:py-3.5',
-                    i === active ? 'border-wa bg-wa text-ink' : 'border-white/15 text-white/70 hover:border-white/40 hover:text-white',
+                    i === active
+                      ? 'border-wa bg-wa text-ink'
+                      : 'border-white/15 text-white/70 hover:border-white/40 hover:text-white',
                   )}
                 >
                   <span className="font-semibold">Cliente: {s.label.toLowerCase()}</span>
-                  <span className={cn('hidden font-machine text-[10px] lg:inline', i === active ? 'text-ink/60' : 'text-white/30')}>0{i + 1}</span>
+                  <span
+                    className={cn(
+                      'hidden font-machine text-[10px] lg:inline',
+                      i === active ? 'text-ink/60' : 'text-white/30',
+                    )}
+                  >
+                    0{i + 1}
+                  </span>
                 </button>
               ))}
             </div>

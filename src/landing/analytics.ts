@@ -95,7 +95,12 @@ const SOURCE_KEY = 'mr_lead_source'
 const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'] as const
 
 /** Guarda a primeira origem do visitante na sessão para associar ao lead. */
-export function captureLeadSource(search: string, referrer: string, path: string, storage: Storage): LeadSource {
+export function captureLeadSource(
+  search: string,
+  referrer: string,
+  path: string,
+  storage: Storage,
+): LeadSource {
   const existing = storage.getItem(SOURCE_KEY)
   if (existing) {
     try {

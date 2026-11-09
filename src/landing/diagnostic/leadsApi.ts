@@ -18,7 +18,11 @@ export type LeadRecord = {
   createdAt: string
 }
 
-export type DiagnosisResult = { diagnosis: Diagnosis; diagnosisSource: 'ai' | 'rules'; delivered: boolean }
+export type DiagnosisResult = {
+  diagnosis: Diagnosis
+  diagnosisSource: 'ai' | 'rules'
+  delivered: boolean
+}
 
 const STORAGE_KEY = 'mr_leads'
 
@@ -44,7 +48,11 @@ function saveLocally(lead: LeadRecord): void {
 function isDiagnosis(value: unknown): value is Diagnosis {
   if (!value || typeof value !== 'object') return false
   const d = value as Record<string, unknown>
-  return typeof d.currentSituation === 'string' && typeof d.recommendation === 'string' && Array.isArray(d.painPoints)
+  return (
+    typeof d.currentSituation === 'string' &&
+    typeof d.recommendation === 'string' &&
+    Array.isArray(d.painPoints)
+  )
 }
 
 export function createLeadId(): string {
@@ -76,8 +84,16 @@ export async function submitLead(lead: LeadRecord): Promise<DiagnosisResult> {
   }
 }
 
-export async function updateLeadStage(lead: LeadRecord, stage: LeadStage, planId?: string): Promise<LeadRecord> {
-  const updated: LeadRecord = { ...lead, funnelStage: stage, planInterest: planId ?? lead.planInterest }
+export async function updateLeadStage(
+  lead: LeadRecord,
+  stage: LeadStage,
+  planId?: string,
+): Promise<LeadRecord> {
+  const updated: LeadRecord = {
+    ...lead,
+    funnelStage: stage,
+    planInterest: planId ?? lead.planInterest,
+  }
   saveLocally(updated)
   const endpoint = leadsEndpoint()
   if (endpoint) {
@@ -85,7 +101,12 @@ export async function updateLeadStage(lead: LeadRecord, stage: LeadStage, planId
       await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event: 'lead.stage_changed', lead_id: lead.id, stage, plan_id: planId ?? null }),
+        body: JSON.stringify({
+          event: 'lead.stage_changed',
+          lead_id: lead.id,
+          stage,
+          plan_id: planId ?? null,
+        }),
       })
     } catch {
       // O estágio já foi salvo localmente; a sincronização externa é melhor esforço.

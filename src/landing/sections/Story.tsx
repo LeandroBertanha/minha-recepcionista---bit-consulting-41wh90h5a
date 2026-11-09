@@ -30,7 +30,10 @@ const chatFilters = ['Tudo', 'Não lidas', 'Favoritas', 'Grupos']
 
 function DefaultAvatar() {
   return (
-    <span className="relative grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-[#DFE5E7]" aria-hidden>
+    <span
+      className="relative grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-[#DFE5E7]"
+      aria-hidden
+    >
       <svg viewBox="0 0 48 48" className="h-12 w-12 fill-white">
         <circle cx="24" cy="19" r="8.5" />
         <path d="M8 44c1.5-9 8-14 16-14s14.5 5 16 14z" />
@@ -46,7 +49,9 @@ function WhatsAppInbox() {
     <div className="overflow-hidden rounded-[32px] border border-ink/10 bg-white shadow-[0_30px_60px_-30px_rgba(10,10,10,0.25)]">
       <div className="px-5 pb-3 pt-5 sm:px-6">
         <div className="flex items-center justify-between">
-          <p className="font-landing text-[22px] font-bold tracking-[-0.02em] text-[#1DAA61]">WhatsApp</p>
+          <p className="font-landing text-[22px] font-bold tracking-[-0.02em] text-[#1DAA61]">
+            WhatsApp
+          </p>
           <div className="flex items-center gap-4 text-ink/70" aria-hidden>
             <Camera className="h-5 w-5" />
             <MoreVertical className="h-5 w-5" />
@@ -121,10 +126,17 @@ export function Problem() {
           </SectionTitle>
           <ol className="mt-12 divide-y divide-ink/10 border-y border-ink/10">
             {problems.map((p, i) => (
-              <li key={p.title} className="grid grid-cols-[2.5rem_1fr] gap-4 py-4 sm:grid-cols-[2.5rem_14rem_1fr]">
-                <span className="font-machine text-xs leading-6 text-ink/35">{String(i + 1).padStart(2, '0')}</span>
+              <li
+                key={p.title}
+                className="grid grid-cols-[2.5rem_1fr] gap-4 py-4 sm:grid-cols-[2.5rem_14rem_1fr]"
+              >
+                <span className="font-machine text-xs leading-6 text-ink/35">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
                 <p className="font-landing text-[15px] font-semibold leading-6">{p.title}</p>
-                <p className="col-start-2 text-[15px] leading-6 text-ink/60 sm:col-start-3">{p.text}</p>
+                <p className="col-start-2 text-[15px] leading-6 text-ink/60 sm:col-start-3">
+                  {p.text}
+                </p>
               </li>
             ))}
           </ol>
@@ -141,7 +153,12 @@ export function Problem() {
   )
 }
 
-const pillarIcons = { atendimento: MessageSquareText, vendas: ShoppingBag, agendamentos: CalendarCheck, gestao: Inbox }
+const pillarIcons = {
+  atendimento: MessageSquareText,
+  vendas: ShoppingBag,
+  agendamentos: CalendarCheck,
+  gestao: Inbox,
+}
 
 export function Solution() {
   return (
@@ -151,12 +168,13 @@ export function Solution() {
           <div>
             <Eyebrow>A solução</Eyebrow>
             <SectionTitle className="mt-4 max-w-3xl">
-              Conheça uma nova maneira de <Human className="text-wa-dark">atender e vender</Human> pelo WhatsApp.
+              Conheça uma nova maneira de <Human className="text-wa-dark">atender e vender</Human>{' '}
+              pelo WhatsApp.
             </SectionTitle>
           </div>
           <p className="max-w-sm text-[15px] leading-relaxed text-ink/60">
-            Uma central inteligente que automatiza o relacionamento com seus clientes, do primeiro “oi” até o atendimento
-            resolvido.
+            Uma central inteligente que automatiza o relacionamento com seus clientes, do primeiro
+            “oi” até o atendimento resolvido.
           </p>
         </div>
         <div className="mt-14 grid gap-3 md:grid-cols-2">
@@ -172,17 +190,38 @@ export function Solution() {
                 )}
               >
                 <div className="flex items-center justify-between">
-                  <span className={cn('grid h-11 w-11 place-items-center rounded-full', dark ? 'bg-wa text-ink' : 'bg-wa-soft text-wa-deep')}>
+                  <span
+                    className={cn(
+                      'grid h-11 w-11 place-items-center rounded-full',
+                      dark ? 'bg-wa text-ink' : 'bg-wa-soft text-wa-deep',
+                    )}
+                  >
                     <Icon className="h-5 w-5" aria-hidden />
                   </span>
-                  <span className={cn('font-machine text-xs', dark ? 'text-white/40' : 'text-ink/35')}>0{i + 1}</span>
+                  <span
+                    className={cn('font-machine text-xs', dark ? 'text-white/40' : 'text-ink/35')}
+                  >
+                    0{i + 1}
+                  </span>
                 </div>
-                <h3 className="mt-10 font-landing text-2xl font-semibold tracking-[-0.025em]">{pillar.title}</h3>
-                <p className={cn('mt-3 max-w-md text-[15px] leading-relaxed', dark ? 'text-white/65' : 'text-ink/60')}>{pillar.text}</p>
+                <h3 className="mt-10 font-landing text-2xl font-semibold tracking-[-0.025em]">
+                  {pillar.title}
+                </h3>
+                <p
+                  className={cn(
+                    'mt-3 max-w-md text-[15px] leading-relaxed',
+                    dark ? 'text-white/65' : 'text-ink/60',
+                  )}
+                >
+                  {pillar.text}
+                </p>
                 <ul className="mt-7 space-y-2">
                   {pillar.points.map((point) => (
                     <li key={point} className="flex items-start gap-2.5 text-sm">
-                      <Check className={cn('mt-0.5 h-4 w-4 shrink-0', dark ? 'text-wa' : 'text-wa-dark')} aria-hidden />
+                      <Check
+                        className={cn('mt-0.5 h-4 w-4 shrink-0', dark ? 'text-wa' : 'text-wa-dark')}
+                        aria-hidden
+                      />
                       {point}
                     </li>
                   ))}
@@ -207,11 +246,20 @@ const backTones = [
 function SegmentFront({ segment, index }: { segment: Segment; index: number }) {
   return (
     <div className="absolute inset-0 bg-ink text-white">
-      <img src={segment.image} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" draggable={false} />
+      <img
+        src={segment.image}
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover"
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+      />
       <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.35)_0%,rgba(0,0,0,0)_28%,rgba(0,0,0,0)_45%,rgba(0,0,0,0.78)_100%)]" />
       <div className="relative flex h-full flex-col justify-between p-6">
         <div className="flex items-start justify-between">
-          <span className="font-machine text-xs text-white/85">{String(index + 1).padStart(2, '0')}</span>
+          <span className="font-machine text-xs text-white/85">
+            {String(index + 1).padStart(2, '0')}
+          </span>
           <span className="hidden h-8 w-8 place-items-center rounded-full bg-white text-ink [@media(hover:hover)]:grid">
             <ArrowUpRight className="h-4 w-4" />
           </span>
@@ -225,7 +273,9 @@ function SegmentFront({ segment, index }: { segment: Segment; index: number }) {
           </span>
         </div>
         <div>
-          <p className="font-machine text-[10px] uppercase tracking-[0.16em] text-wa">{segment.focus}</p>
+          <p className="font-machine text-[10px] uppercase tracking-[0.16em] text-wa">
+            {segment.focus}
+          </p>
           <p className="mt-2 font-landing text-[clamp(1.5rem,2.4vw,1.9rem)] font-semibold leading-[1.05] tracking-[-0.03em]">
             {segment.title}
           </p>
@@ -240,13 +290,36 @@ function SegmentBack({ segment, index }: { segment: Segment; index: number }) {
   return (
     <div className={cn('absolute inset-0 flex flex-col justify-between p-6', tone.surface)}>
       <div className="flex items-start justify-between gap-4">
-        <span className={cn('font-machine text-xs', tone.muted)}>{String(index + 1).padStart(2, '0')}</span>
-        <span className={cn('text-right font-machine text-[10px] uppercase tracking-[0.16em]', tone.muted)}>{segment.title}</span>
+        <span className={cn('font-machine text-xs', tone.muted)}>
+          {String(index + 1).padStart(2, '0')}
+        </span>
+        <span
+          className={cn(
+            'text-right font-machine text-[10px] uppercase tracking-[0.16em]',
+            tone.muted,
+          )}
+        >
+          {segment.title}
+        </span>
       </div>
       <div>
-        <p className="font-human text-[clamp(2.6rem,4.4vw,3.6rem)] italic leading-none tracking-[-0.01em]">Na prática</p>
-        <p className={cn('mt-5 rounded-2xl rounded-tl-md p-4 text-[15px] leading-relaxed shadow-sm', tone.bubble)}>{segment.example}</p>
-        <p className={cn('mt-3 hidden items-center gap-1.5 font-machine text-[10px] uppercase tracking-[0.14em] [@media(hover:none)]:flex', tone.muted)}>
+        <p className="font-human text-[clamp(2.6rem,4.4vw,3.6rem)] italic leading-none tracking-[-0.01em]">
+          Na prática
+        </p>
+        <p
+          className={cn(
+            'mt-5 rounded-2xl rounded-tl-md p-4 text-[15px] leading-relaxed shadow-sm',
+            tone.bubble,
+          )}
+        >
+          {segment.example}
+        </p>
+        <p
+          className={cn(
+            'mt-3 hidden items-center gap-1.5 font-machine text-[10px] uppercase tracking-[0.14em] [@media(hover:none)]:flex',
+            tone.muted,
+          )}
+        >
           <RotateCcw className="h-3 w-3" />
           Toque para voltar
         </p>
@@ -273,7 +346,10 @@ export function Segments() {
             className="group inline-flex items-center gap-2 self-start font-landing text-sm font-semibold underline decoration-ink/20 underline-offset-4 hover:decoration-ink lg:self-auto"
           >
             Ver o que automatizar no meu negócio
-            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
+            <ArrowRight
+              className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+              aria-hidden
+            />
           </button>
         </div>
         <ul className="mt-14 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

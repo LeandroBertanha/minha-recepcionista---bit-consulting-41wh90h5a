@@ -17,7 +17,10 @@ export function Logo({ className }: { className?: string }) {
   return (
     <a
       href="#inicio"
-      className={cn('flex shrink-0 items-center gap-2 whitespace-nowrap font-landing text-[14px] font-semibold tracking-[-0.02em] sm:text-[15px]', className)}
+      className={cn(
+        'flex shrink-0 items-center gap-2 whitespace-nowrap font-landing text-[14px] font-semibold tracking-[-0.02em] sm:text-[15px]',
+        className,
+      )}
     >
       <img src="/landing/logo-mark.png" alt="" width={32} height={32} className="h-8 w-8" />
       {landingConfig.productName}
@@ -56,7 +59,13 @@ export function Nav() {
           >
             Entrar
           </a>
-          <CtaButton ctaId="nav_diagnostic" position="nav" icon={false} className="h-10 px-3.5 sm:px-4" onClick={() => open({ origin: 'nav' })}>
+          <CtaButton
+            ctaId="nav_diagnostic"
+            position="nav"
+            icon={false}
+            className="h-10 px-3.5 sm:px-4"
+            onClick={() => open({ origin: 'nav' })}
+          >
             <span className="sm:hidden">Diagnóstico</span>
             <span className="hidden sm:inline">Diagnóstico grátis</span>
           </CtaButton>
@@ -76,13 +85,20 @@ export function Nav() {
           <ul className="flex flex-col">
             {navLinks.map((link) => (
               <li key={link.href}>
-                <a href={link.href} onClick={() => setMenuOpen(false)} className="block rounded-2xl px-4 py-3 text-[15px] hover:bg-white/5">
+                <a
+                  href={link.href}
+                  onClick={() => setMenuOpen(false)}
+                  className="block rounded-2xl px-4 py-3 text-[15px] hover:bg-white/5"
+                >
                   {link.label}
                 </a>
               </li>
             ))}
             <li>
-              <a href={landingConfig.appUrl} className="block rounded-2xl px-4 py-3 text-[15px] text-white/70 hover:bg-white/5">
+              <a
+                href={landingConfig.appUrl}
+                className="block rounded-2xl px-4 py-3 text-[15px] text-white/70 hover:bg-white/5"
+              >
                 Entrar na plataforma
               </a>
             </li>

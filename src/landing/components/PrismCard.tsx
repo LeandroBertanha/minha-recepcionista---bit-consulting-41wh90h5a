@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { animate, motion, useMotionTemplate, useMotionValue, useReducedMotion, useTransform, type MotionValue } from 'motion/react'
+import {
+  animate,
+  motion,
+  useMotionTemplate,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+  type MotionValue,
+} from 'motion/react'
 import { cn } from '@/lib/utils'
 
 const SLATS = 7
@@ -38,20 +46,44 @@ function Face({
       )}
       style={{ transform: `rotateY(${angle}deg) translateZ(${APOTHEM})` }}
     >
-      <div className="absolute inset-y-0" style={{ width: `${SLATS * 100}%`, left: `${-index * 100}%` }}>
+      <div
+        className="absolute inset-y-0"
+        style={{ width: `${SLATS * 100}%`, left: `${-index * 100}%` }}
+      >
         {children}
       </div>
-      <motion.div className="pointer-events-none absolute inset-0 bg-black" style={{ opacity: darkness }} />
+      <motion.div
+        className="pointer-events-none absolute inset-0 bg-black"
+        style={{ opacity: darkness }}
+      />
     </div>
   )
 }
 
-function Slat({ index, target, delay, front, back }: { index: number; target: number; delay: number; front: ReactNode; back: ReactNode }) {
+function Slat({
+  index,
+  target,
+  delay,
+  front,
+  back,
+}: {
+  index: number
+  target: number
+  delay: number
+  front: ReactNode
+  back: ReactNode
+}) {
   const rotation = useMotionValue(0)
   const transform = useMotionTemplate`translateZ(-${APOTHEM}) rotateY(${rotation}deg)`
 
   useEffect(() => {
-    const controls = animate(rotation, target, { type: 'spring', stiffness: 150, damping: 17, mass: 0.9, delay })
+    const controls = animate(rotation, target, {
+      type: 'spring',
+      stiffness: 150,
+      damping: 17,
+      mass: 0.9,
+      delay,
+    })
     return () => controls.stop()
   }, [rotation, target, delay])
 
@@ -79,7 +111,17 @@ function Slat({ index, target, delay, front, back }: { index: number; target: nu
  * A card made of vertical triangular prisms, like a trivision billboard: on hover, focus or tap the prisms turn in a
  * wave from the side the pointer came in, from the front face to the back face.
  */
-export function PrismCard({ label, front, back, className }: { label: string; front: ReactNode; back: ReactNode; className?: string }) {
+export function PrismCard({
+  label,
+  front,
+  back,
+  className,
+}: {
+  label: string
+  front: ReactNode
+  back: ReactNode
+  className?: string
+}) {
   const reduceMotion = useReducedMotion()
   const ref = useRef<HTMLDivElement>(null)
   const pointerType = useRef('mouse')
@@ -129,7 +171,14 @@ export function PrismCard({ label, front, back, className }: { label: string; fr
       {reduceMotion ? (
         <div className="absolute inset-0 overflow-hidden rounded-[28px]">
           <div className="absolute inset-0">{front}</div>
-          <div className={cn('absolute inset-0 transition-opacity duration-200', turned ? 'opacity-100' : 'opacity-0')}>{back}</div>
+          <div
+            className={cn(
+              'absolute inset-0 transition-opacity duration-200',
+              turned ? 'opacity-100' : 'opacity-0',
+            )}
+          >
+            {back}
+          </div>
         </div>
       ) : (
         <div className="absolute inset-0 [transform-style:preserve-3d]" aria-hidden>

@@ -57,7 +57,9 @@ export default function Login() {
           <h1 className="text-2xl font-semibold tracking-tight text-bit-navy">
             Bem-vindo de volta
           </h1>
-          <p className="text-neutral-500">Faça login para acessar sua caixa de entrada do WhatsApp</p>
+          <p className="text-neutral-500">
+            Faça login para acessar sua caixa de entrada do WhatsApp
+          </p>
         </div>
 
         <Card className="relative border-neutral-200/80 shadow-xl shadow-brand-900/10">

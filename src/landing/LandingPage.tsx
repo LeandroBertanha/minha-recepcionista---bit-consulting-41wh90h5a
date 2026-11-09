@@ -40,7 +40,12 @@ export default function LandingPage() {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     if (!reduce) root.style.scrollBehavior = 'smooth'
     try {
-      captureLeadSource(window.location.search, document.referrer, window.location.pathname, sessionStorage)
+      captureLeadSource(
+        window.location.search,
+        document.referrer,
+        window.location.pathname,
+        sessionStorage,
+      )
     } catch {
       // sessionStorage indisponível: a origem será recalculada no envio do diagnóstico.
     }

@@ -17,14 +17,25 @@ import {
   type DiagnosticAnswers,
   type Diagnosis,
 } from './engine'
-import { createLeadId, submitLead, updateLeadStage, type LeadRecord, type LeadStage } from './leadsApi'
+import {
+  createLeadId,
+  submitLead,
+  updateLeadStage,
+  type LeadRecord,
+  type LeadStage,
+} from './leadsApi'
 
 const PROGRESS_KEY = 'mr_diagnostic_progress'
 const CONTACT_STEP = questions.length
 
 type Phase = 'questions' | 'analyzing' | 'result'
 
-type Props = { open: boolean; origin: string; planId?: string; onOpenChange: (open: boolean) => void }
+type Props = {
+  open: boolean
+  origin: string
+  planId?: string
+  onOpenChange: (open: boolean) => void
+}
 
 function loadProgress(): Partial<DiagnosticAnswers> {
   try {
@@ -58,11 +69,18 @@ function Tail({ side }: { side: 'in' | 'out' }) {
       viewBox="0 0 8 13"
       width="8"
       height="13"
-      className={cn('absolute top-0', side === 'in' ? '-left-2 text-white' : '-right-2 text-wa-bubble')}
+      className={cn(
+        'absolute top-0',
+        side === 'in' ? '-left-2 text-white' : '-right-2 text-wa-bubble',
+      )}
     >
       <path
         fill="currentColor"
-        d={side === 'in' ? 'M1.533 3.568 8 12.193V1H2.812C1.042 1 .474 2.156 1.533 3.568z' : 'M5.188 1H0v11.193l6.467-8.625C7.526 2.156 6.958 1 5.188 1z'}
+        d={
+          side === 'in'
+            ? 'M1.533 3.568 8 12.193V1H2.812C1.042 1 .474 2.156 1.533 3.568z'
+            : 'M5.188 1H0v11.193l6.467-8.625C7.526 2.156 6.958 1 5.188 1z'
+        }
       />
     </svg>
   )
@@ -77,7 +95,15 @@ function MessageTime({ time, read }: { time: string; read?: boolean }) {
   )
 }
 
-function BotLine({ children, time, tail = true }: { children: React.ReactNode; time: string; tail?: boolean }) {
+function BotLine({
+  children,
+  time,
+  tail = true,
+}: {
+  children: React.ReactNode
+  time: string
+  tail?: boolean
+}) {
   return (
     <div className={cn('flex', tail ? 'mt-3' : 'mt-0.5')}>
       <div
@@ -95,7 +121,15 @@ function BotLine({ children, time, tail = true }: { children: React.ReactNode; t
   )
 }
 
-function UserLine({ children, time, onEdit }: { children: React.ReactNode; time: string; onEdit?: () => void }) {
+function UserLine({
+  children,
+  time,
+  onEdit,
+}: {
+  children: React.ReactNode
+  time: string
+  onEdit?: () => void
+}) {
   return (
     <div className="mt-3 flex justify-end">
       <button
@@ -117,7 +151,13 @@ function UserLine({ children, time, onEdit }: { children: React.ReactNode; time:
 
 function SystemChip({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn('mx-auto w-fit max-w-[90%] rounded-lg px-3 py-1.5 text-center text-[12.5px] leading-snug', bubbleShadow, className)}>
+    <div
+      className={cn(
+        'mx-auto w-fit max-w-[90%] rounded-lg px-3 py-1.5 text-center text-[12.5px] leading-snug',
+        bubbleShadow,
+        className,
+      )}
+    >
       {children}
     </div>
   )
@@ -126,7 +166,12 @@ function SystemChip({ children, className }: { children: React.ReactNode; classN
 function TypingBubble() {
   return (
     <div className="mt-3 flex">
-      <div className={cn('relative flex items-center gap-1 rounded-lg rounded-tl-none bg-white px-4 py-3.5', bubbleShadow)}>
+      <div
+        className={cn(
+          'relative flex items-center gap-1 rounded-lg rounded-tl-none bg-white px-4 py-3.5',
+          bubbleShadow,
+        )}
+      >
         <Tail side="in" />
         {[0, 150, 300].map((delay) => (
           <span
@@ -155,7 +200,9 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
   const [delivered, setDelivered] = useState(false)
   const [confirmation, setConfirmation] = useState<string | null>(null)
   const threadEnd = useRef<HTMLDivElement>(null)
-  const [time] = useState(() => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))
+  const [time] = useState(() =>
+    new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+  )
 
   useEffect(() => {
     try {
@@ -199,8 +246,10 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
     event.preventDefault()
     const nextErrors: typeof errors = {}
     if (contact.name.trim().length < 2) nextErrors.name = 'Informe seu nome.'
-    if (!isValidWhatsapp(contact.whatsapp)) nextErrors.whatsapp = 'Informe um WhatsApp com DDD, como (11) 99999-9999.'
-    if (!isValidEmail(contact.email)) nextErrors.email = 'Informe um e-mail válido, como nome@empresa.com.'
+    if (!isValidWhatsapp(contact.whatsapp))
+      nextErrors.whatsapp = 'Informe um WhatsApp com DDD, como (11) 99999-9999.'
+    if (!isValidEmail(contact.email))
+      nextErrors.email = 'Informe um e-mail válido, como nome@empresa.com.'
     if (!consent) nextErrors.consent = 'Precisamos da sua autorização para enviar o diagnóstico.'
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
@@ -208,10 +257,19 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
 
     const full = answers as DiagnosticAnswers
     const recommended = recommendPlan(full, plans)
-    const source = captureLeadSource(window.location.search, document.referrer, window.location.pathname, sessionStorage)
+    const source = captureLeadSource(
+      window.location.search,
+      document.referrer,
+      window.location.pathname,
+      sessionStorage,
+    )
     const record: LeadRecord = {
       id: createLeadId(),
-      contact: { name: contact.name.trim(), whatsapp: normalizeWhatsapp(contact.whatsapp), email: contact.email.trim().toLowerCase() },
+      contact: {
+        name: contact.name.trim(),
+        whatsapp: normalizeWhatsapp(contact.whatsapp),
+        email: contact.email.trim().toLowerCase(),
+      },
       company: { name: full.companyName, segment: full.segment },
       answers: full,
       diagnosis: buildRuleDiagnosis(full),
@@ -232,7 +290,12 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
     setLead({ ...record, diagnosis: result.diagnosis, diagnosisSource: result.diagnosisSource })
     setDelivered(result.delivered)
     setPhase('result')
-    track('diagnostic_complete', { origin, segment: full.segment, recommended_plan: record.recommendedPlan, source: result.diagnosisSource })
+    track('diagnostic_complete', {
+      origin,
+      segment: full.segment,
+      recommended_plan: record.recommendedPlan,
+      source: result.diagnosisSource,
+    })
   }
 
   async function convert(stage: LeadStage, message: string, url?: string | null) {
@@ -271,7 +334,9 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
 
   const progress = phase === 'questions' ? Math.round((step / (questions.length + 1)) * 100) : 100
   const current = questions[step]
-  const recommended = lead ? plans.find((p) => p.id === (lead.planInterest ?? lead.recommendedPlan)) ?? null : null
+  const recommended = lead
+    ? (plans.find((p) => p.id === (lead.planInterest ?? lead.recommendedPlan)) ?? null)
+    : null
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -293,10 +358,18 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
               </button>
             )}
             <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-white">
-              <img src="/landing/logo-mark-ink.png" alt="" width={28} height={28} className="h-7 w-7" />
+              <img
+                src="/landing/logo-mark-ink.png"
+                alt=""
+                width={28}
+                height={28}
+                className="h-7 w-7"
+              />
             </span>
             <div className="min-w-0 flex-1">
-              <DialogPrimitive.Title className="truncate text-[16px] font-semibold leading-tight">Minha Recepcionista</DialogPrimitive.Title>
+              <DialogPrimitive.Title className="truncate text-[16px] font-semibold leading-tight">
+                Minha Recepcionista
+              </DialogPrimitive.Title>
               <p id="diagnostic-desc" className="truncate text-[13px] leading-tight text-white/80">
                 {phase === 'result'
                   ? 'Diagnóstico pronto'
@@ -314,23 +387,34 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
               <X className="h-5 w-5" />
             </DialogPrimitive.Close>
             <div className="absolute inset-x-0 bottom-0 h-[3px] bg-black/15">
-              <motion.div className="h-full bg-wa" animate={{ width: `${progress}%` }} transition={{ duration: 0.3, ease: 'easeOut' }} />
+              <motion.div
+                className="h-full bg-wa"
+                animate={{ width: `${progress}%` }}
+                transition={{ duration: 0.3, ease: 'easeOut' }}
+              />
             </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-10" style={{ backgroundImage: WALLPAPER }}>
+          <div
+            className="flex-1 overflow-y-auto px-4 py-5 sm:px-10"
+            style={{ backgroundImage: WALLPAPER }}
+          >
             {phase === 'questions' && (
               <div className="mx-auto max-w-xl">
-                <SystemChip className="bg-white text-[11.5px] font-medium uppercase tracking-wide text-wa-icon">Hoje</SystemChip>
+                <SystemChip className="bg-white text-[11.5px] font-medium uppercase tracking-wide text-wa-icon">
+                  Hoje
+                </SystemChip>
                 <SystemChip className="mt-3 bg-wa-notice text-wa-icon">
                   <Lock className="mr-1 inline h-3 w-3 -translate-y-px" aria-hidden />
                   Suas respostas são usadas apenas para gerar este diagnóstico.
                 </SystemChip>
                 <BotLine time={time}>
-                  Olá! Em 8 perguntas rápidas eu entendo como funciona o atendimento da sua empresa e mostro o que pode ser
-                  automatizado.
+                  Olá! Em 8 perguntas rápidas eu entendo como funciona o atendimento da sua empresa
+                  e mostro o que pode ser automatizado.
                   {planInterest && (
-                    <span className="mt-1 block text-wa-icon">Vi que você se interessou pelo plano {planInterest.name}.</span>
+                    <span className="mt-1 block text-wa-icon">
+                      Vi que você se interessou pelo plano {planInterest.name}.
+                    </span>
                   )}
                 </BotLine>
                 {questions.slice(0, step).map((q, i) => (
@@ -356,8 +440,8 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                       </BotLine>
                     ) : (
                       <BotLine time={time}>
-                        Pronto, {answers.companyName}! Para onde envio o diagnóstico? Seus dados são usados apenas para o
-                        contato sobre a plataforma.
+                        Pronto, {answers.companyName}! Para onde envio o diagnóstico? Seus dados são
+                        usados apenas para o contato sobre a plataforma.
                       </BotLine>
                     )}
                   </motion.div>
@@ -369,7 +453,9 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
             {phase === 'analyzing' && (
               <div className="mx-auto max-w-xl" role="status">
                 <SystemChip className="bg-white text-wa-icon">
-                  <span className="block font-medium text-wa-text">Analisando o atendimento de {answers.companyName}</span>
+                  <span className="block font-medium text-wa-text">
+                    Analisando o atendimento de {answers.companyName}
+                  </span>
                   Cruzando volume de mensagens, equipe e objetivos com os recursos da plataforma.
                 </SystemChip>
                 <TypingBubble />
@@ -380,14 +466,16 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
               <div className={cn('mx-auto max-w-2xl rounded-xl bg-white p-5 sm:p-7', bubbleShadow)}>
                 <p className="inline-flex items-center gap-2 rounded-full bg-wa-soft px-3 py-1.5 font-machine text-[10px] uppercase tracking-[0.14em] text-wa-deep">
                   <Sparkles className="h-3.5 w-3.5" />
-                  {lead.diagnosisSource === 'ai' ? 'Análise gerada por IA com base nas suas respostas' : 'Análise com base nas suas respostas'}
+                  {lead.diagnosisSource === 'ai'
+                    ? 'Análise gerada por IA com base nas suas respostas'
+                    : 'Análise com base nas suas respostas'}
                 </p>
                 <h3 className="mt-5 text-[clamp(1.4rem,3vw,1.9rem)] font-semibold leading-[1.15] tracking-[-0.025em]">
                   {lead.diagnosis.recommendation}
                 </h3>
                 <p className="mt-3 text-sm text-wa-meta">
-                  Recomendação baseada nas informações que você enviou. Os resultados dependem da configuração e do volume real
-                  de conversas.
+                  Recomendação baseada nas informações que você enviou. Os resultados dependem da
+                  configuração e do volume real de conversas.
                 </p>
                 <DiagnosisBody diagnosis={lead.diagnosis} />
 
@@ -396,7 +484,9 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                     <p className="font-machine text-[10px] uppercase tracking-[0.16em] text-wa-bubble">
                       {lead.planInterest ? 'Plano escolhido' : 'Plano mais adequado ao seu perfil'}
                     </p>
-                    <p className="mt-2 text-2xl font-semibold tracking-[-0.02em]">{recommended.name}</p>
+                    <p className="mt-2 text-2xl font-semibold tracking-[-0.02em]">
+                      {recommended.name}
+                    </p>
                     <p className="mt-1 text-sm text-white/60">{recommended.description}</p>
                     <ul className="mt-5 grid gap-2 sm:grid-cols-2">
                       {recommended.features.map((f) => (
@@ -409,7 +499,10 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                 )}
 
                 {confirmation ? (
-                  <div role="status" className="mt-6 flex items-start gap-3 rounded-xl bg-wa-bubble p-5 text-[15px]">
+                  <div
+                    role="status"
+                    className="mt-6 flex items-start gap-3 rounded-xl bg-wa-bubble p-5 text-[15px]"
+                  >
                     <CheckCheck className="mt-0.5 h-5 w-5 shrink-0 text-wa-read" />
                     <p>{confirmation}</p>
                   </div>
@@ -422,7 +515,10 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                           convert(
                             'checkout',
                             `Recebemos seu interesse no plano ${recommended.name}. Nossa equipe vai falar com você pelo WhatsApp ${formatPhone(lead.contact.whatsapp.slice(2))} para concluir a contratação.`,
-                            recommended.checkoutUrl ?? salesLink(`Olá! Fiz o diagnóstico e quero contratar o plano ${recommended.name} para ${lead.company.name}.`),
+                            recommended.checkoutUrl ??
+                              salesLink(
+                                `Olá! Fiz o diagnóstico e quero contratar o plano ${recommended.name} para ${lead.company.name}.`,
+                              ),
                           )
                         }
                         className="inline-flex h-14 items-center justify-center gap-2 rounded-full bg-wa-action px-6 text-[15px] font-semibold text-white transition-colors hover:bg-wa-action-hover active:scale-[0.98]"
@@ -436,7 +532,9 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                         convert(
                           'demo',
                           `Pedido de demonstração registrado. Vamos chamar você no WhatsApp ${formatPhone(lead.contact.whatsapp.slice(2))} para combinar o melhor horário.`,
-                          salesLink(`Olá! Fiz o diagnóstico da ${lead.company.name} e quero agendar uma demonstração.`),
+                          salesLink(
+                            `Olá! Fiz o diagnóstico da ${lead.company.name} e quero agendar uma demonstração.`,
+                          ),
                         )
                       }
                       className="inline-flex h-14 items-center justify-center gap-2 rounded-full border border-wa-action px-6 text-[15px] font-semibold text-wa-header transition-colors hover:bg-wa-panel active:scale-[0.98]"
@@ -465,10 +563,15 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                 )}
                 {!delivered && import.meta.env.DEV && (
                   <p className="mt-6 rounded-lg bg-wa-notice p-3 font-machine text-[11px] text-wa-icon">
-                    Ambiente local: configure VITE_LEADS_ENDPOINT para enviar leads ao CRM. Este lead foi salvo apenas no navegador.
+                    Ambiente local: configure VITE_LEADS_ENDPOINT para enviar leads ao CRM. Este
+                    lead foi salvo apenas no navegador.
                   </p>
                 )}
-                <button type="button" onClick={restart} className="mt-6 text-sm text-wa-meta underline underline-offset-4 hover:text-wa-text">
+                <button
+                  type="button"
+                  onClick={restart}
+                  className="mt-6 text-sm text-wa-meta underline underline-offset-4 hover:text-wa-text"
+                >
                   Refazer o diagnóstico
                 </button>
               </div>
@@ -534,7 +637,12 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
 
                 {!current && (
                   <form onSubmit={submitContact} noValidate className="grid gap-3 sm:grid-cols-2">
-                    <Field id="c-name" label="Seu nome" error={errors.name} className="sm:col-span-2">
+                    <Field
+                      id="c-name"
+                      label="Seu nome"
+                      error={errors.name}
+                      className="sm:col-span-2"
+                    >
                       <input
                         id="c-name"
                         autoComplete="name"
@@ -553,7 +661,9 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                         autoComplete="tel-national"
                         placeholder="(11) 99999-9999"
                         value={contact.whatsapp}
-                        onChange={(e) => setContact((c) => ({ ...c, whatsapp: formatPhone(e.target.value) }))}
+                        onChange={(e) =>
+                          setContact((c) => ({ ...c, whatsapp: formatPhone(e.target.value) }))
+                        }
                         className={inputClass(errors.whatsapp)}
                         aria-invalid={Boolean(errors.whatsapp)}
                         aria-describedby={errors.whatsapp ? 'c-whatsapp-error' : undefined}
@@ -591,14 +701,21 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                           aria-invalid={Boolean(errors.consent)}
                         />
                         <span>
-                          Autorizo o contato pelo WhatsApp e e-mail sobre o diagnóstico e concordo com a{' '}
-                          <a href="/privacidade" target="_blank" className="underline underline-offset-2">
+                          Autorizo o contato pelo WhatsApp e e-mail sobre o diagnóstico e concordo
+                          com a{' '}
+                          <a
+                            href="/privacidade"
+                            target="_blank"
+                            className="underline underline-offset-2"
+                          >
                             Política de Privacidade
                           </a>
                           .
                         </span>
                       </label>
-                      {errors.consent && <p className="mt-1.5 text-sm text-red-600">{errors.consent}</p>}
+                      {errors.consent && (
+                        <p className="mt-1.5 text-sm text-red-600">{errors.consent}</p>
+                      )}
                     </div>
                     <button
                       type="submit"
@@ -624,7 +741,19 @@ function inputClass(error?: string) {
   )
 }
 
-function Field({ id, label, error, className, children }: { id: string; label: string; error?: string; className?: string; children: React.ReactNode }) {
+function Field({
+  id,
+  label,
+  error,
+  className,
+  children,
+}: {
+  id: string
+  label: string
+  error?: string
+  className?: string
+  children: React.ReactNode
+}) {
   return (
     <div className={className}>
       <label htmlFor={id} className="mb-1.5 block text-[13px] font-medium text-wa-icon">
@@ -650,16 +779,23 @@ function DiagnosisBody({ diagnosis }: { diagnosis: Diagnosis }) {
   return (
     <div className="mt-8">
       <div className="rounded-xl bg-wa-panel p-5">
-        <p className="font-machine text-[10px] uppercase tracking-[0.16em] text-wa-meta">Situação atual</p>
+        <p className="font-machine text-[10px] uppercase tracking-[0.16em] text-wa-meta">
+          Situação atual
+        </p>
         <p className="mt-1.5 text-[15px] leading-relaxed">{diagnosis.currentSituation}</p>
       </div>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {blocks.map((block) => (
           <div key={block.title} className="rounded-xl border border-[#E9EDEF] p-5">
-            <p className="font-machine text-[10px] uppercase tracking-[0.16em] text-wa-header">{block.title}</p>
+            <p className="font-machine text-[10px] uppercase tracking-[0.16em] text-wa-header">
+              {block.title}
+            </p>
             <ul className="mt-3 space-y-2">
               {block.items.map((item) => (
-                <li key={item} className="flex items-start gap-2 text-sm leading-relaxed text-wa-text/85">
+                <li
+                  key={item}
+                  className="flex items-start gap-2 text-sm leading-relaxed text-wa-text/85"
+                >
                   <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-wa-action" /> {item}
                 </li>
               ))}

@@ -42,7 +42,12 @@ export const questions: Question[] = [
       { value: 'outro', label: 'Outro segmento' },
     ],
   },
-  { id: 'companyName', kind: 'text', prompt: 'Qual é o nome da empresa?', placeholder: 'Ex.: Clínica Bem Estar' },
+  {
+    id: 'companyName',
+    kind: 'text',
+    prompt: 'Qual é o nome da empresa?',
+    placeholder: 'Ex.: Clínica Bem Estar',
+  },
   {
     id: 'monthlyClients',
     kind: 'choice',
@@ -124,7 +129,9 @@ const teamScore: Record<string, number> = { '1': 0, '2a3': 1, '4a10': 2, mais10:
 const clientsScore: Record<string, number> = { ate100: 0, '100a500': 1, '500a2000': 2, mais2000: 3 }
 
 /** 0 = operação pequena, 1 = média, 2 = alto volume. */
-export function operationTier(answers: Pick<DiagnosticAnswers, 'dailyMessages' | 'teamSize' | 'monthlyClients'>): 0 | 1 | 2 {
+export function operationTier(
+  answers: Pick<DiagnosticAnswers, 'dailyMessages' | 'teamSize' | 'monthlyClients'>,
+): 0 | 1 | 2 {
   const score =
     (volumeScore[answers.dailyMessages] ?? 0) * 2 +
     (teamScore[answers.teamSize] ?? 0) +
@@ -221,7 +228,8 @@ export function buildRuleDiagnosis(answers: DiagnosticAnswers): Diagnosis {
 
   const painPoints = [pain.pain]
   if (tier >= 1 && answers.mainPain !== 'repetitivas') painPoints.push(painCopy.repetitivas.pain)
-  if (answers.currentTool === 'nenhuma') painPoints.push('Todo o atendimento depende de alguém disponível para responder.')
+  if (answers.currentTool === 'nenhuma')
+    painPoints.push('Todo o atendimento depende de alguém disponível para responder.')
   if (answers.currentTool === 'chatbotMenu')
     painPoints.push('Menus numerados limitam o cliente e não interpretam perguntas abertas.')
 
@@ -234,7 +242,11 @@ export function buildRuleDiagnosis(answers: DiagnosticAnswers): Diagnosis {
   )
 
   const recommendedFeatures = Array.from(
-    new Set([goal.feature, 'Atendimento humano quando necessário', 'Gestão de conversas centralizada']),
+    new Set([
+      goal.feature,
+      'Atendimento humano quando necessário',
+      'Gestão de conversas centralizada',
+    ]),
   )
 
   return {
@@ -242,7 +254,10 @@ export function buildRuleDiagnosis(answers: DiagnosticAnswers): Diagnosis {
       teamLabel[answers.teamSize] ?? 'uma equipe'
     } no atendimento.`,
     painPoints,
-    opportunities: [goal.opportunity, 'Responder clientes 24 horas por dia, inclusive fora do expediente.'],
+    opportunities: [
+      goal.opportunity,
+      'Responder clientes 24 horas por dia, inclusive fora do expediente.',
+    ],
     automatableProcesses,
     recommendedFeatures,
     recommendation: `Identificamos que ${company} pode automatizar boa parte das perguntas repetitivas, agilizar o primeiro atendimento e manter a equipe focada nos casos que precisam de uma pessoa.`,

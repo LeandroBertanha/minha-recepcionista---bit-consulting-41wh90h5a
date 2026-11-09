@@ -303,7 +303,9 @@ function DashboardApp() {
         <section className="w-full max-w-md rounded-[28px] border border-neutral-200 bg-white p-8 text-center shadow-xl dark:border-white/10 dark:bg-[#141414]">
           <ShieldCheck className="mx-auto h-10 w-10 text-[#25D366]" />
           <h1 className="mt-4 text-2xl font-semibold">Acesso aguardando liberação</h1>
-          <p className="mt-3 text-sm leading-6 text-neutral-500 dark:text-neutral-400">{tenantError}</p>
+          <p className="mt-3 text-sm leading-6 text-neutral-500 dark:text-neutral-400">
+            {tenantError}
+          </p>
           <button
             type="button"
             onClick={signOut}
@@ -481,7 +483,9 @@ function Dashboard({ companyName }: { companyName: string }) {
     <div className="mx-auto max-w-[1600px] space-y-6">
       <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold tracking-[-0.03em] sm:text-3xl">Bom dia, {firstName}</h2>
+          <h2 className="text-2xl font-semibold tracking-[-0.03em] sm:text-3xl">
+            Bom dia, {firstName}
+          </h2>
           <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
             Acompanhe a operação da {companyName} em tempo real.
           </p>
@@ -636,7 +640,9 @@ function Dashboard({ companyName }: { companyName: string }) {
                     className="border-t border-neutral-100 dark:border-white/[0.07]"
                   >
                     <td className="px-5 py-4 font-semibold">{row.client}</td>
-                    <td className="px-4 py-4 text-neutral-500 dark:text-neutral-400">{row.reason}</td>
+                    <td className="px-4 py-4 text-neutral-500 dark:text-neutral-400">
+                      {row.reason}
+                    </td>
                     <td className="px-4 py-4 font-mono text-xs">{row.wait}</td>
                     <td className="px-4 py-4">
                       <StatusPill tone={row.priority === 'Alta' ? 'danger' : 'warning'}>
@@ -720,7 +726,10 @@ function AttentionView() {
             </thead>
             <tbody>
               {attentionRows.map((row) => (
-                <tr key={row.client} className="border-t border-neutral-100 dark:border-white/[0.07]">
+                <tr
+                  key={row.client}
+                  className="border-t border-neutral-100 dark:border-white/[0.07]"
+                >
                   <td className="px-6 py-5 font-bold">{row.client}</td>
                   <td className="px-4 py-5">
                     <span className="inline-flex items-center gap-2">
@@ -799,7 +808,11 @@ function AgentsView() {
               <div
                 className={
                   'flex h-12 w-12 items-center justify-center rounded-full text-lg font-semibold ' +
-                  (index === 0 ? 'bg-[#25D366] text-[#0A0A0A]' : index === 1 ? 'bg-[#0A0A0A] text-[#25D366] dark:bg-white dark:text-[#0A0A0A]' : 'bg-neutral-200 text-neutral-500')
+                  (index === 0
+                    ? 'bg-[#25D366] text-[#0A0A0A]'
+                    : index === 1
+                      ? 'bg-[#0A0A0A] text-[#25D366] dark:bg-white dark:text-[#0A0A0A]'
+                      : 'bg-neutral-200 text-neutral-500')
                 }
               >
                 {agent.name[0]}
@@ -913,7 +926,10 @@ function KnowledgeView() {
             </thead>
             <tbody>
               {knowledgeRows.map((row) => (
-                <tr key={row.source} className="border-t border-neutral-100 dark:border-white/[0.07]">
+                <tr
+                  key={row.source}
+                  className="border-t border-neutral-100 dark:border-white/[0.07]"
+                >
                   <td className="px-6 py-5">
                     <div className="flex items-center gap-3">
                       <div className="rounded-lg bg-[#EAFBF0] p-2 text-[#128C7E] dark:bg-[#25D366]/10 dark:text-[#25D366]">
@@ -922,8 +938,12 @@ function KnowledgeView() {
                       <span className="font-semibold">{row.source}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-5 text-neutral-500 dark:text-neutral-400">{row.category}</td>
-                  <td className="px-4 py-5 text-neutral-500 dark:text-neutral-400">{row.updated}</td>
+                  <td className="px-4 py-5 text-neutral-500 dark:text-neutral-400">
+                    {row.category}
+                  </td>
+                  <td className="px-4 py-5 text-neutral-500 dark:text-neutral-400">
+                    {row.updated}
+                  </td>
                   <td className="px-4 py-5">{row.pages} itens</td>
                   <td className="px-4 py-5">
                     <StatusPill tone={row.status === 'Ativo' ? 'success' : 'warning'}>
@@ -996,7 +1016,9 @@ function ModuleView({ id }: { id: ViewId }) {
           <Icon className="h-7 w-7" />
         </div>
         <h2 className="mt-6 text-3xl font-semibold tracking-tight">{module.title}</h2>
-        <p className="mt-2 max-w-2xl text-neutral-500 dark:text-neutral-400">{module.description}</p>
+        <p className="mt-2 max-w-2xl text-neutral-500 dark:text-neutral-400">
+          {module.description}
+        </p>
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           {module.cards.map((card, index) => (
             <article
@@ -1096,7 +1118,11 @@ function AuthenticatedApp() {
               </span>
             </h2>
             <div className="mt-10 flex max-w-xl items-end gap-5">
-              <HeroReveal lensRadius={90} hint="Passe o mouse" className="w-[240px] shrink-0 rounded-[28px] xl:w-[270px]" />
+              <HeroReveal
+                lensRadius={90}
+                hint="Passe o mouse"
+                className="w-[240px] shrink-0 rounded-[28px] xl:w-[270px]"
+              />
               <div className="space-y-2 pb-6">
                 <p className="w-fit max-w-[15rem] rounded-2xl rounded-bl-md bg-white px-3.5 py-2.5 text-[13px] leading-snug text-[#0A0A0A]">
                   Oi! Vocês têm horário amanhã?
