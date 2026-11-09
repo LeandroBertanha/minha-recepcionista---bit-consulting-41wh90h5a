@@ -252,7 +252,7 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
     scopeKey,
   )
 
-  useRealtime(
+  useRealtime<any>(
     'whatsapp_contacts',
     (e) => {
       if (!isRecordFromInstance(e.record, instanceId, organizationId)) return
@@ -280,7 +280,7 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
 
   const selectedContactId = selectedContact?.id
 
-  useRealtime(
+  useRealtime<any>(
     'whatsapp_messages',
     (e) => {
       if (!isRecordFromInstance(e.record, instanceId, organizationId)) return
