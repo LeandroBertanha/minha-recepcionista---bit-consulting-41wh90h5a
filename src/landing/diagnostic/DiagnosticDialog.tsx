@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, ArrowRight, Check, Loader2, Send, Sparkles, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, CheckCheck, Lock, Send, Sparkles, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { captureLeadSource, track } from '../analytics'
 import { landingConfig, plans } from '../landing.config'
@@ -46,26 +46,96 @@ function formatPhone(value: string): string {
   return `(${d.slice(0, 2)}) ${d.slice(2, d.length - 4)}-${d.slice(-4)}`
 }
 
-function BotLine({ children }: { children: React.ReactNode }) {
+const WALLPAPER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" fill="none" stroke="#54656F" stroke-opacity=".09" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 22h26a6 6 0 0 1 6 6v14a6 6 0 0 1-6 6H30l-8 7v-7h-4a6 6 0 0 1-6-6V28a6 6 0 0 1 6-6z"/><circle cx="118" cy="34" r="12"/><path d="M112 34l4 4 8-8"/><path d="M84 92c-6-7-18-2-14 8 3 6 14 13 14 13s11-7 14-13c4-10-8-15-14-8z"/><rect x="20" y="96" width="22" height="38" rx="5"/><path d="M28 128h6"/><path d="M128 104l3 7 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z"/><path d="M70 30l6 6m0-6-6 6"/><circle cx="140" cy="150" r="3"/><circle cx="60" cy="150" r="2"/></svg>`
+const WALLPAPER = `url("data:image/svg+xml,${encodeURIComponent(WALLPAPER_SVG)}")`
+
+const bubbleShadow = 'shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]'
+
+function Tail({ side }: { side: 'in' | 'out' }) {
   return (
-    <div className="flex items-end gap-2.5">
-      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-ink font-machine text-[9px] font-medium text-wa">IA</span>
-      <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-neutral-100 px-4 py-3 text-[15px] leading-relaxed text-ink">{children}</div>
+    <svg
+      aria-hidden
+      viewBox="0 0 8 13"
+      width="8"
+      height="13"
+      className={cn('absolute top-0', side === 'in' ? '-left-2 text-white' : '-right-2 text-wa-bubble')}
+    >
+      <path
+        fill="currentColor"
+        d={side === 'in' ? 'M1.533 3.568 8 12.193V1H2.812C1.042 1 .474 2.156 1.533 3.568z' : 'M5.188 1H0v11.193l6.467-8.625C7.526 2.156 6.958 1 5.188 1z'}
+      />
+    </svg>
+  )
+}
+
+function MessageTime({ time, read }: { time: string; read?: boolean }) {
+  return (
+    <span className="float-right ml-3 mt-1.5 inline-flex translate-y-1 items-center gap-1 text-[11px] leading-none text-wa-meta">
+      {time}
+      {read && <CheckCheck className="h-4 w-4 text-wa-read" aria-label="Lida" />}
+    </span>
+  )
+}
+
+function BotLine({ children, time, tail = true }: { children: React.ReactNode; time: string; tail?: boolean }) {
+  return (
+    <div className={cn('flex', tail ? 'mt-3' : 'mt-0.5')}>
+      <div
+        className={cn(
+          'relative max-w-[85%] rounded-lg bg-white px-2.5 pb-2 pt-1.5 text-[14.5px] leading-[1.4] text-wa-text',
+          bubbleShadow,
+          tail && 'rounded-tl-none',
+        )}
+      >
+        {tail && <Tail side="in" />}
+        {children}
+        <MessageTime time={time} />
+      </div>
     </div>
   )
 }
 
-function UserLine({ children, onEdit }: { children: React.ReactNode; onEdit?: () => void }) {
+function UserLine({ children, time, onEdit }: { children: React.ReactNode; time: string; onEdit?: () => void }) {
   return (
-    <div className="flex justify-end">
+    <div className="mt-3 flex justify-end">
       <button
         type="button"
         onClick={onEdit}
         title="Alterar resposta"
-        className="max-w-[85%] rounded-2xl rounded-br-md bg-wa-bubble px-4 py-3 text-left text-[15px] leading-relaxed text-ink transition-colors hover:bg-[#c9f7c1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wa-dark"
+        className={cn(
+          'relative max-w-[85%] rounded-lg rounded-tr-none bg-wa-bubble px-2.5 pb-2 pt-1.5 text-left text-[14.5px] leading-[1.4] text-wa-text transition-[filter] hover:brightness-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wa-action',
+          bubbleShadow,
+        )}
       >
+        <Tail side="out" />
         {children}
+        <MessageTime time={time} read />
       </button>
+    </div>
+  )
+}
+
+function SystemChip({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={cn('mx-auto w-fit max-w-[90%] rounded-lg px-3 py-1.5 text-center text-[12.5px] leading-snug', bubbleShadow, className)}>
+      {children}
+    </div>
+  )
+}
+
+function TypingBubble() {
+  return (
+    <div className="mt-3 flex">
+      <div className={cn('relative flex items-center gap-1 rounded-lg rounded-tl-none bg-white px-4 py-3.5', bubbleShadow)}>
+        <Tail side="in" />
+        {[0, 150, 300].map((delay) => (
+          <span
+            key={delay}
+            className="h-2 w-2 rounded-full bg-wa-meta/70 motion-safe:animate-bounce"
+            style={{ animationDelay: `${delay}ms` }}
+          />
+        ))}
+      </div>
     </div>
   )
 }
@@ -85,6 +155,7 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
   const [delivered, setDelivered] = useState(false)
   const [confirmation, setConfirmation] = useState<string | null>(null)
   const threadEnd = useRef<HTMLDivElement>(null)
+  const [time] = useState(() => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))
 
   useEffect(() => {
     try {
@@ -207,47 +278,69 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-[60] bg-ink/70 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <DialogPrimitive.Content
-          className="fixed inset-0 z-[61] flex flex-col bg-white font-landing text-ink outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-bottom-4 sm:inset-4 sm:overflow-hidden sm:rounded-[32px] lg:inset-y-6 lg:left-1/2 lg:right-auto lg:w-[880px] lg:-translate-x-1/2"
+          className="fixed inset-0 z-[61] flex flex-col bg-wa-chat font-landing text-wa-text outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-bottom-4 sm:inset-4 sm:overflow-hidden sm:rounded-[20px] lg:inset-y-6 lg:left-1/2 lg:right-auto lg:w-[880px] lg:-translate-x-1/2"
           aria-describedby="diagnostic-desc"
         >
-          <header className="flex items-center gap-4 border-b border-ink/10 px-5 py-4 sm:px-7">
-            <div className="min-w-0 flex-1">
-              <DialogPrimitive.Title className="text-[15px] font-semibold tracking-[-0.01em]">Diagnóstico gratuito</DialogPrimitive.Title>
-              <p id="diagnostic-desc" className="font-machine text-[10px] uppercase tracking-[0.14em] text-ink/45">
-                {phase === 'result' ? 'Resultado' : phase === 'analyzing' ? 'Analisando' : step < CONTACT_STEP ? `Pergunta ${step + 1} de ${questions.length}` : 'Último passo'}
-              </p>
-            </div>
+          <header className="relative flex items-center gap-3 bg-wa-header px-3 py-2.5 text-white sm:px-5">
             {phase === 'questions' && step > 0 && (
               <button
                 type="button"
                 onClick={() => setStep((s) => Math.max(0, s - 1))}
-                className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm text-ink/60 hover:bg-neutral-100 hover:text-ink"
+                aria-label="Voltar para a pergunta anterior"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-white/90 transition-colors hover:bg-white/10"
               >
-                <ArrowLeft className="h-4 w-4" /> Voltar
+                <ArrowLeft className="h-5 w-5" />
               </button>
             )}
-            <DialogPrimitive.Close className="grid h-9 w-9 place-items-center rounded-full hover:bg-neutral-100" aria-label="Fechar diagnóstico">
+            <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-white">
+              <img src="/landing/logo-mark-ink.png" alt="" width={28} height={28} className="h-7 w-7" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <DialogPrimitive.Title className="truncate text-[16px] font-semibold leading-tight">Minha Recepcionista</DialogPrimitive.Title>
+              <p id="diagnostic-desc" className="truncate text-[13px] leading-tight text-white/80">
+                {phase === 'result'
+                  ? 'Diagnóstico pronto'
+                  : phase === 'analyzing'
+                    ? 'digitando…'
+                    : step < CONTACT_STEP
+                      ? `Diagnóstico gratuito · pergunta ${step + 1} de ${questions.length}`
+                      : 'Diagnóstico gratuito · último passo'}
+              </p>
+            </div>
+            <DialogPrimitive.Close
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-white/90 transition-colors hover:bg-white/10"
+              aria-label="Fechar diagnóstico"
+            >
               <X className="h-5 w-5" />
             </DialogPrimitive.Close>
+            <div className="absolute inset-x-0 bottom-0 h-[3px] bg-black/15">
+              <motion.div className="h-full bg-wa" animate={{ width: `${progress}%` }} transition={{ duration: 0.3, ease: 'easeOut' }} />
+            </div>
           </header>
-          <div className="h-1 bg-neutral-100">
-            <motion.div className="h-1 bg-wa" animate={{ width: `${progress}%` }} transition={{ duration: 0.3, ease: 'easeOut' }} />
-          </div>
 
-          <div className="flex-1 overflow-y-auto px-5 py-7 sm:px-10">
+          <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-10" style={{ backgroundImage: WALLPAPER }}>
             {phase === 'questions' && (
-              <div className="mx-auto max-w-xl space-y-4">
-                <BotLine>
+              <div className="mx-auto max-w-xl">
+                <SystemChip className="bg-white text-[11.5px] font-medium uppercase tracking-wide text-wa-icon">Hoje</SystemChip>
+                <SystemChip className="mt-3 bg-wa-notice text-wa-icon">
+                  <Lock className="mr-1 inline h-3 w-3 -translate-y-px" aria-hidden />
+                  Suas respostas são usadas apenas para gerar este diagnóstico.
+                </SystemChip>
+                <BotLine time={time}>
                   Olá! Em 8 perguntas rápidas eu entendo como funciona o atendimento da sua empresa e mostro o que pode ser
                   automatizado.
                   {planInterest && (
-                    <span className="mt-1 block text-ink/60">Vi que você se interessou pelo plano {planInterest.name}.</span>
+                    <span className="mt-1 block text-wa-icon">Vi que você se interessou pelo plano {planInterest.name}.</span>
                   )}
                 </BotLine>
                 {questions.slice(0, step).map((q, i) => (
-                  <div key={q.id} className="space-y-4">
-                    <BotLine>{q.prompt}</BotLine>
-                    <UserLine onEdit={() => setStep(i)}>{q.kind === 'choice' ? optionLabel(q.id, answers[q.id] ?? '') : answers[q.id]}</UserLine>
+                  <div key={q.id}>
+                    <BotLine time={time} tail={i !== 0}>
+                      {q.prompt}
+                    </BotLine>
+                    <UserLine time={time} onEdit={() => setStep(i)}>
+                      {q.kind === 'choice' ? optionLabel(q.id, answers[q.id] ?? '') : answers[q.id]}
+                    </UserLine>
                   </div>
                 ))}
                 <AnimatePresence mode="wait">
@@ -256,32 +349,35 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                     initial={reduceMotion ? false : { opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                    className="space-y-4"
                   >
                     {current ? (
-                      <BotLine>{current.prompt}</BotLine>
+                      <BotLine time={time} tail={step !== 0}>
+                        {current.prompt}
+                      </BotLine>
                     ) : (
-                      <BotLine>
+                      <BotLine time={time}>
                         Pronto, {answers.companyName}! Para onde envio o diagnóstico? Seus dados são usados apenas para o
                         contato sobre a plataforma.
                       </BotLine>
                     )}
                   </motion.div>
                 </AnimatePresence>
-                <div ref={threadEnd} />
+                <div ref={threadEnd} className="h-2" />
               </div>
             )}
 
             {phase === 'analyzing' && (
-              <div className="mx-auto flex max-w-md flex-col items-center py-16 text-center" role="status">
-                <Loader2 className="h-8 w-8 animate-spin text-wa-dark" />
-                <p className="mt-6 text-xl font-semibold tracking-[-0.02em]">Analisando o atendimento de {answers.companyName}</p>
-                <p className="mt-2 text-sm text-ink/55">Cruzando volume de mensagens, equipe e objetivos com os recursos da plataforma.</p>
+              <div className="mx-auto max-w-xl" role="status">
+                <SystemChip className="bg-white text-wa-icon">
+                  <span className="block font-medium text-wa-text">Analisando o atendimento de {answers.companyName}</span>
+                  Cruzando volume de mensagens, equipe e objetivos com os recursos da plataforma.
+                </SystemChip>
+                <TypingBubble />
               </div>
             )}
 
             {phase === 'result' && lead && (
-              <div className="mx-auto max-w-2xl">
+              <div className={cn('mx-auto max-w-2xl rounded-xl bg-white p-5 sm:p-7', bubbleShadow)}>
                 <p className="inline-flex items-center gap-2 rounded-full bg-wa-soft px-3 py-1.5 font-machine text-[10px] uppercase tracking-[0.14em] text-wa-deep">
                   <Sparkles className="h-3.5 w-3.5" />
                   {lead.diagnosisSource === 'ai' ? 'Análise gerada por IA com base nas suas respostas' : 'Análise com base nas suas respostas'}
@@ -289,15 +385,15 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                 <h3 className="mt-5 text-[clamp(1.4rem,3vw,1.9rem)] font-semibold leading-[1.15] tracking-[-0.025em]">
                   {lead.diagnosis.recommendation}
                 </h3>
-                <p className="mt-3 text-sm text-ink/50">
+                <p className="mt-3 text-sm text-wa-meta">
                   Recomendação baseada nas informações que você enviou. Os resultados dependem da configuração e do volume real
                   de conversas.
                 </p>
                 <DiagnosisBody diagnosis={lead.diagnosis} />
 
                 {recommended && (
-                  <div className="mt-8 rounded-[24px] bg-ink p-6 text-white sm:p-7">
-                    <p className="font-machine text-[10px] uppercase tracking-[0.16em] text-wa">
+                  <div className="mt-8 rounded-xl bg-wa-deep p-6 text-white sm:p-7">
+                    <p className="font-machine text-[10px] uppercase tracking-[0.16em] text-wa-bubble">
                       {lead.planInterest ? 'Plano escolhido' : 'Plano mais adequado ao seu perfil'}
                     </p>
                     <p className="mt-2 text-2xl font-semibold tracking-[-0.02em]">{recommended.name}</p>
@@ -313,8 +409,8 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                 )}
 
                 {confirmation ? (
-                  <div role="status" className="mt-6 flex items-start gap-3 rounded-2xl border border-wa/40 bg-wa-soft p-5 text-[15px]">
-                    <Check className="mt-0.5 h-5 w-5 shrink-0 text-wa-deep" />
+                  <div role="status" className="mt-6 flex items-start gap-3 rounded-xl bg-wa-bubble p-5 text-[15px]">
+                    <CheckCheck className="mt-0.5 h-5 w-5 shrink-0 text-wa-read" />
                     <p>{confirmation}</p>
                   </div>
                 ) : (
@@ -329,7 +425,7 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                             recommended.checkoutUrl ?? salesLink(`Olá! Fiz o diagnóstico e quero contratar o plano ${recommended.name} para ${lead.company.name}.`),
                           )
                         }
-                        className="inline-flex h-14 items-center justify-center gap-2 rounded-full bg-wa px-6 text-[15px] font-semibold text-ink transition-colors hover:bg-[#3ee07a] active:scale-[0.98]"
+                        className="inline-flex h-14 items-center justify-center gap-2 rounded-full bg-wa-action px-6 text-[15px] font-semibold text-white transition-colors hover:bg-wa-action-hover active:scale-[0.98]"
                       >
                         Contratar o plano {recommended.name} <ArrowRight className="h-4 w-4" />
                       </button>
@@ -343,7 +439,7 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                           salesLink(`Olá! Fiz o diagnóstico da ${lead.company.name} e quero agendar uma demonstração.`),
                         )
                       }
-                      className="inline-flex h-14 items-center justify-center gap-2 rounded-full border border-ink/15 px-6 text-[15px] font-semibold transition-colors hover:border-ink/50 active:scale-[0.98]"
+                      className="inline-flex h-14 items-center justify-center gap-2 rounded-full border border-wa-action px-6 text-[15px] font-semibold text-wa-header transition-colors hover:bg-wa-panel active:scale-[0.98]"
                     >
                       Solicitar demonstração
                     </button>
@@ -351,7 +447,7 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                       <button
                         type="button"
                         onClick={() => convert('trial', '', landingConfig.signupUrl)}
-                        className="inline-flex h-12 items-center justify-center rounded-full bg-ink px-6 text-sm font-semibold text-white"
+                        className="inline-flex h-12 items-center justify-center rounded-full bg-wa-deep px-6 text-sm font-semibold text-white"
                       >
                         Iniciar teste gratuito
                       </button>
@@ -360,7 +456,7 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                       <button
                         type="button"
                         onClick={() => convert('signup', '', landingConfig.signupUrl)}
-                        className="inline-flex h-12 items-center justify-center rounded-full text-sm font-semibold underline underline-offset-4"
+                        className="inline-flex h-12 items-center justify-center rounded-full text-sm font-semibold text-wa-header underline underline-offset-4"
                       >
                         Criar minha conta
                       </button>
@@ -368,11 +464,11 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                   </div>
                 )}
                 {!delivered && import.meta.env.DEV && (
-                  <p className="mt-6 rounded-xl bg-neutral-100 p-3 font-machine text-[11px] text-ink/55">
+                  <p className="mt-6 rounded-lg bg-wa-notice p-3 font-machine text-[11px] text-wa-icon">
                     Ambiente local: configure VITE_LEADS_ENDPOINT para enviar leads ao CRM. Este lead foi salvo apenas no navegador.
                   </p>
                 )}
-                <button type="button" onClick={restart} className="mt-6 text-sm text-ink/50 underline underline-offset-4 hover:text-ink">
+                <button type="button" onClick={restart} className="mt-6 text-sm text-wa-meta underline underline-offset-4 hover:text-wa-text">
                   Refazer o diagnóstico
                 </button>
               </div>
@@ -380,7 +476,7 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
           </div>
 
           {phase === 'questions' && (
-            <footer className="border-t border-ink/10 bg-white px-5 py-4 sm:px-10 sm:py-5">
+            <footer className="bg-wa-panel px-3 py-3 sm:px-10 sm:py-4">
               <div className="mx-auto max-w-xl">
                 {current?.kind === 'choice' && (
                   <div className="flex flex-wrap gap-2" role="group" aria-label={current.prompt}>
@@ -390,10 +486,11 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                         type="button"
                         onClick={() => answer(step, option.value)}
                         className={cn(
-                          'rounded-full border px-4 py-2.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wa-dark active:scale-[0.97]',
+                          'rounded-full px-4 py-2.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wa-action active:scale-[0.97]',
+                          bubbleShadow,
                           answers[current.id] === option.value
-                            ? 'border-ink bg-ink text-white'
-                            : 'border-ink/15 hover:border-ink hover:bg-ink hover:text-white',
+                            ? 'bg-wa-header text-white'
+                            : 'bg-white text-wa-header hover:bg-wa-soft',
                         )}
                       >
                         {option.label}
@@ -417,10 +514,14 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                         maxLength={120}
                         aria-invalid={Boolean(textError)}
                         aria-describedby={textError ? 'diag-text-error' : undefined}
-                        className="h-12 flex-1 rounded-full border border-ink/15 px-5 text-[15px] outline-none focus:border-ink"
+                        className="h-11 flex-1 rounded-full border border-transparent bg-white px-5 text-[15px] text-wa-text outline-none placeholder:text-wa-meta focus:border-wa-action"
                       />
-                      <button type="submit" aria-label="Enviar resposta" className="grid h-12 w-12 place-items-center rounded-full bg-wa text-ink hover:bg-[#3ee07a]">
-                        <Send className="h-4 w-4" />
+                      <button
+                        type="submit"
+                        aria-label="Enviar resposta"
+                        className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-wa-action text-white transition-colors hover:bg-wa-action-hover"
+                      >
+                        <Send className="h-[18px] w-[18px] translate-x-px" />
                       </button>
                     </div>
                     {textError && (
@@ -481,12 +582,12 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                       className="absolute -left-[9999px] h-0 w-0 opacity-0"
                     />
                     <div className="sm:col-span-2">
-                      <label className="flex items-start gap-3 text-sm text-ink/70">
+                      <label className="flex items-start gap-3 text-sm text-wa-icon">
                         <input
                           type="checkbox"
                           checked={consent}
                           onChange={(e) => setConsent(e.target.checked)}
-                          className="mt-0.5 h-4 w-4 accent-[#128C7E]"
+                          className="mt-0.5 h-4 w-4 accent-[#00A884]"
                           aria-invalid={Boolean(errors.consent)}
                         />
                         <span>
@@ -501,7 +602,7 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
                     </div>
                     <button
                       type="submit"
-                      className="inline-flex h-14 items-center justify-center gap-2 rounded-full bg-wa px-6 text-[15px] font-semibold text-ink transition-colors hover:bg-[#3ee07a] active:scale-[0.98] sm:col-span-2"
+                      className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-wa-action px-6 text-[15px] font-semibold text-white transition-colors hover:bg-wa-action-hover active:scale-[0.98] sm:col-span-2"
                     >
                       Ver meu diagnóstico <ArrowRight className="h-4 w-4" />
                     </button>
@@ -518,15 +619,15 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
 
 function inputClass(error?: string) {
   return cn(
-    'h-12 w-full rounded-2xl border px-4 text-[15px] outline-none transition-colors focus:border-ink',
-    error ? 'border-red-400' : 'border-ink/15',
+    'h-11 w-full rounded-lg border bg-white px-4 text-[15px] text-wa-text outline-none transition-colors placeholder:text-wa-meta focus:border-wa-action',
+    error ? 'border-red-400' : 'border-transparent',
   )
 }
 
 function Field({ id, label, error, className, children }: { id: string; label: string; error?: string; className?: string; children: React.ReactNode }) {
   return (
     <div className={className}>
-      <label htmlFor={id} className="mb-1.5 block text-sm font-medium">
+      <label htmlFor={id} className="mb-1.5 block text-[13px] font-medium text-wa-icon">
         {label}
       </label>
       {children}
@@ -548,18 +649,18 @@ function DiagnosisBody({ diagnosis }: { diagnosis: Diagnosis }) {
   ]
   return (
     <div className="mt-8">
-      <div className="rounded-2xl bg-neutral-100 p-5">
-        <p className="font-machine text-[10px] uppercase tracking-[0.16em] text-ink/45">Situação atual</p>
+      <div className="rounded-xl bg-wa-panel p-5">
+        <p className="font-machine text-[10px] uppercase tracking-[0.16em] text-wa-meta">Situação atual</p>
         <p className="mt-1.5 text-[15px] leading-relaxed">{diagnosis.currentSituation}</p>
       </div>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {blocks.map((block) => (
-          <div key={block.title} className="rounded-2xl border border-ink/10 p-5">
-            <p className="font-machine text-[10px] uppercase tracking-[0.16em] text-wa-dark">{block.title}</p>
+          <div key={block.title} className="rounded-xl border border-[#E9EDEF] p-5">
+            <p className="font-machine text-[10px] uppercase tracking-[0.16em] text-wa-header">{block.title}</p>
             <ul className="mt-3 space-y-2">
               {block.items.map((item) => (
-                <li key={item} className="flex items-start gap-2 text-sm leading-relaxed text-ink/80">
-                  <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-ink/40" /> {item}
+                <li key={item} className="flex items-start gap-2 text-sm leading-relaxed text-wa-text/85">
+                  <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-wa-action" /> {item}
                 </li>
               ))}
             </ul>
