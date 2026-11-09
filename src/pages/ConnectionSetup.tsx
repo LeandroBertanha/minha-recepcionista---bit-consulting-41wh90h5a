@@ -275,7 +275,7 @@ export default function ConnectionSetup({ organizationId }: { organizationId: st
           </span>
         )
       default:
-        return <span className={`${base} bg-slate-100 text-slate-600`}>Desconhecido</span>
+        return <span className={`${base} bg-neutral-100 text-neutral-600`}>Desconhecido</span>
     }
   }
 
@@ -287,15 +287,15 @@ export default function ConnectionSetup({ organizationId }: { organizationId: st
 
   if (loading) {
     return (
-      <div className="flex-1 overflow-y-auto bg-slate-50/50 flex flex-col">
+      <div className="flex-1 overflow-y-auto bg-neutral-50/50 flex flex-col">
         <PageHeader
           title="Conexão do WhatsApp"
           description="Vincule seu dispositivo para começar a enviar e receber mensagens de forma profissional e limpa."
         />
         <div className="flex flex-col items-center mx-auto w-full px-6 md:px-10 pb-16">
           <div className="w-full max-w-md mt-8">
-            <Card className="bg-white border border-slate-200/60 shadow-lg shadow-slate-200/40 rounded-[20px] overflow-hidden">
-              <CardHeader className="p-6 border-b border-slate-50/50">
+            <Card className="bg-white border border-neutral-200/60 shadow-lg shadow-neutral-200/40 rounded-[20px] overflow-hidden">
+              <CardHeader className="p-6 border-b border-neutral-50/50">
                 <div className="flex justify-between items-center">
                   <div className="space-y-2">
                     <Skeleton className="h-5 w-32" />
@@ -321,7 +321,7 @@ export default function ConnectionSetup({ organizationId }: { organizationId: st
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50/50 flex flex-col">
+    <div className="flex-1 overflow-y-auto bg-neutral-50/50 flex flex-col">
       <PageHeader
         title="Conexão do WhatsApp"
         description="Vincule seu dispositivo para começar a enviar e receber mensagens de forma profissional e limpa."
@@ -345,16 +345,16 @@ export default function ConnectionSetup({ organizationId }: { organizationId: st
         ) : null}
         {!instance ? (
           <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-700 mt-8 md:mt-0">
-            <Alert className="bg-white border border-slate-200/60 shadow-lg shadow-slate-200/40 rounded-[20px] p-6">
+            <Alert className="bg-white border border-neutral-200/60 shadow-lg shadow-neutral-200/40 rounded-[20px] p-6">
               <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-5">
                 <div className="h-12 w-12 rounded-xl bg-brand-100 flex items-center justify-center shrink-0 shadow-sm shadow-brand-100">
                   <Smartphone className="h-5 w-5 text-brand-600" />
                 </div>
                 <div className="space-y-1.5">
-                  <AlertTitle className="text-base font-medium text-slate-900">
+                  <AlertTitle className="text-base font-medium text-neutral-900">
                     Conecte o seu WhatsApp
                   </AlertTitle>
-                  <AlertDescription className="text-sm text-slate-500 leading-relaxed">
+                  <AlertDescription className="text-sm text-neutral-500 leading-relaxed">
                     Sua conta ainda não possui um WhatsApp conectado. Prepare sua conexão e escaneie
                     o QR Code com o seu celular. Cada usuário conecta o próprio aparelho.
                   </AlertDescription>
@@ -371,18 +371,18 @@ export default function ConnectionSetup({ organizationId }: { organizationId: st
           </div>
         ) : (
           <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-700 mt-8 md:mt-0">
-            <Card className="bg-white border border-slate-200/60 shadow-lg shadow-slate-200/40 rounded-[20px] overflow-hidden">
-              <CardHeader className="p-6 flex flex-row items-center justify-between gap-4 border-b border-slate-50">
+            <Card className="bg-white border border-neutral-200/60 shadow-lg shadow-neutral-200/40 rounded-[20px] overflow-hidden">
+              <CardHeader className="p-6 flex flex-row items-center justify-between gap-4 border-b border-neutral-50">
                 <div className="space-y-1 text-left">
                   <div className="flex items-center gap-2">
                     <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-brand-100">
                       <Smartphone className="h-4 w-4 text-brand-600" />
                     </div>
-                    <CardTitle className="text-base font-medium text-slate-900 tracking-tight line-clamp-1">
+                    <CardTitle className="text-base font-medium text-neutral-900 tracking-tight line-clamp-1">
                       {instance.instance_name}
                     </CardTitle>
                   </div>
-                  <CardDescription className="text-xs text-slate-500">
+                  <CardDescription className="text-xs text-neutral-500">
                     WhatsApp deste usuário
                   </CardDescription>
                 </div>
@@ -397,10 +397,10 @@ export default function ConnectionSetup({ organizationId }: { organizationId: st
                         <CheckCircle2 className="h-8 w-8 text-emerald-500" />
                       </div>
                       <div className="space-y-1.5">
-                        <h3 className="text-lg font-medium text-slate-900 tracking-tight">
+                        <h3 className="text-lg font-medium text-neutral-900 tracking-tight">
                           Dispositivo Conectado
                         </h3>
-                        <p className="text-slate-500 text-sm max-w-[260px] leading-relaxed">
+                        <p className="text-neutral-500 text-sm max-w-[260px] leading-relaxed">
                           Sua sessão está ativa. O envio e recebimento de mensagens estão
                           operacionais e em sincronia.
                         </p>
@@ -410,8 +410,8 @@ export default function ConnectionSetup({ organizationId }: { organizationId: st
                     <div className="flex flex-col items-center w-full space-y-6 animate-in fade-in duration-500">
                       {instance.qrcode ? (
                         <div className="relative group">
-                          <div className="absolute -inset-4 rounded-3xl bg-slate-50/50 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-                          <div className="relative p-4 bg-white rounded-2xl shadow-sm border border-slate-100 ring-1 ring-slate-900/5">
+                          <div className="absolute -inset-4 rounded-3xl bg-neutral-50/50 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                          <div className="relative p-4 bg-white rounded-2xl shadow-sm border border-neutral-100 ring-1 ring-neutral-900/5">
                             <img
                               src={getQRCodeSrc(instance.qrcode)}
                               alt="WhatsApp QR Code"
@@ -432,7 +432,7 @@ export default function ConnectionSetup({ organizationId }: { organizationId: st
                       )}
 
                       <div className="text-center space-y-2">
-                        <h3 className="text-base font-medium text-slate-900 tracking-tight flex items-center justify-center gap-2">
+                        <h3 className="text-base font-medium text-neutral-900 tracking-tight flex items-center justify-center gap-2">
                           {instance.status === 'connecting' && (
                             <RefreshCw className="h-4 w-4 animate-spin text-brand-600" />
                           )}
@@ -440,7 +440,7 @@ export default function ConnectionSetup({ organizationId }: { organizationId: st
                             ? 'Conectando...'
                             : 'Escaneie o código QR'}
                         </h3>
-                        <p className="text-sm text-slate-500 max-w-[260px] mx-auto leading-relaxed">
+                        <p className="text-sm text-neutral-500 max-w-[260px] mx-auto leading-relaxed">
                           {instance.status === 'connecting'
                             ? 'Aguardando sincronização com o WhatsApp...'
                             : 'Gere um novo QR code e escaneie com seu celular.'}
@@ -451,12 +451,12 @@ export default function ConnectionSetup({ organizationId }: { organizationId: st
                 </div>
               </CardContent>
 
-              <CardFooter className="p-4 sm:px-6 sm:py-5 bg-slate-50/30 border-t border-slate-100/50 flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
+              <CardFooter className="p-4 sm:px-6 sm:py-5 bg-neutral-50/30 border-t border-neutral-100/50 flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
                 <Button
                   variant="ghost"
                   onClick={handleRefresh}
                   disabled={loading || actionLoading}
-                  className="w-full sm:w-auto text-slate-500 hover:text-slate-900 hover:bg-slate-100 font-medium text-sm h-9"
+                  className="w-full sm:w-auto text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 font-medium text-sm h-9"
                 >
                   <RefreshCw className={`h-3.5 w-3.5 mr-2 ${loading ? 'animate-spin' : ''}`} />
                   Atualizar
@@ -483,7 +483,7 @@ export default function ConnectionSetup({ organizationId }: { organizationId: st
                     <Button
                       onClick={() => handleConnect()}
                       disabled={actionLoading || !integration?.ready}
-                      className="w-full sm:w-auto bg-brand-500 hover:bg-brand-600 text-white shadow-sm shadow-brand-500/20 font-medium px-5 text-sm h-9"
+                      className="w-full sm:w-auto bg-brand-500 hover:bg-[#1EBE5A] text-[#0A0A0A] font-medium px-5 text-sm h-9"
                     >
                       {actionLoading ? (
                         <RefreshCw className="h-3.5 w-3.5 mr-2 animate-spin" />

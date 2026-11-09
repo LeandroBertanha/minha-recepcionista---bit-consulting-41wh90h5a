@@ -4,6 +4,8 @@ import pb from './lib/pocketbase/client'
 import ConnectionSetup from './pages/ConnectionSetup'
 import Inbox from './pages/Inbox'
 import { Toaster } from './components/ui/toaster'
+import { ProductLogo } from './components/ProductLogo'
+import { HeroReveal } from './landing/components/HeroReveal'
 import type { LucideIcon } from 'lucide-react'
 import {
   AlertTriangle,
@@ -182,7 +184,7 @@ function StatusPill({
   tone?: 'neutral' | 'success' | 'warning' | 'danger' | 'info'
 }) {
   const tones = {
-    neutral: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+    neutral: 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300',
     success: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300',
     warning: 'bg-amber-100 text-amber-700 dark:bg-amber-400/15 dark:text-amber-300',
     danger: 'bg-rose-100 text-rose-700 dark:bg-rose-400/15 dark:text-rose-300',
@@ -286,13 +288,9 @@ function DashboardApp() {
 
   if (tenantLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f4fbfa] text-slate-700 dark:bg-[#071318] dark:text-slate-200">
+      <div className="flex min-h-screen items-center justify-center bg-[#F5F5F5] text-neutral-700 dark:bg-[#0A0A0A] dark:text-neutral-200">
         <div className="text-center">
-          <img
-            src="/bit-consulting-logo.webp"
-            alt="Bit Consulting"
-            className="mx-auto h-16 w-32 object-contain"
-          />
+          <ProductLogo tone="light" className="justify-center dark:[&>span]:text-white" />
           <p className="mt-4 text-sm font-semibold">Carregando sua empresa...</p>
         </div>
       </div>
@@ -301,15 +299,15 @@ function DashboardApp() {
 
   if (!tenant) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f4fbfa] px-4 text-slate-900 dark:bg-[#071318] dark:text-slate-100">
-        <section className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-xl dark:border-white/10 dark:bg-[#0b1c22]">
-          <ShieldCheck className="mx-auto h-10 w-10 text-[#12bfc3]" />
-          <h1 className="mt-4 text-2xl font-extrabold">Acesso aguardando liberação</h1>
-          <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">{tenantError}</p>
+      <main className="flex min-h-screen items-center justify-center bg-[#F5F5F5] px-4 text-neutral-900 dark:bg-[#0A0A0A] dark:text-neutral-100">
+        <section className="w-full max-w-md rounded-[28px] border border-neutral-200 bg-white p-8 text-center shadow-xl dark:border-white/10 dark:bg-[#141414]">
+          <ShieldCheck className="mx-auto h-10 w-10 text-[#25D366]" />
+          <h1 className="mt-4 text-2xl font-semibold">Acesso aguardando liberação</h1>
+          <p className="mt-3 text-sm leading-6 text-neutral-500 dark:text-neutral-400">{tenantError}</p>
           <button
             type="button"
             onClick={signOut}
-            className="mt-6 rounded-xl bg-[#12bfc3] px-5 py-3 text-sm font-bold text-white"
+            className="mt-6 rounded-full bg-[#25D366] px-5 py-3 text-sm font-bold text-[#0A0A0A]"
           >
             Sair da conta
           </button>
@@ -320,10 +318,10 @@ function DashboardApp() {
 
   return (
     <div className={dark ? 'dark' : ''}>
-      <div className="min-h-screen bg-[#f4fbfa] text-slate-900 transition-colors dark:bg-[#071318] dark:text-slate-100">
+      <div className="min-h-screen bg-[#F5F5F5] text-neutral-900 transition-colors dark:bg-[#0A0A0A] dark:text-neutral-100">
         {sidebarOpen && (
           <button
-            className="fixed inset-0 z-30 bg-slate-950/45 lg:hidden"
+            className="fixed inset-0 z-30 bg-neutral-950/45 lg:hidden"
             aria-label="Fechar menu"
             onClick={() => setSidebarOpen(false)}
           />
@@ -331,40 +329,26 @@ function DashboardApp() {
 
         <aside
           className={
-            'fixed inset-y-0 left-0 z-40 flex w-[276px] flex-col border-r border-slate-200/80 bg-white transition-transform dark:border-white/10 dark:bg-[#0b1c22] lg:translate-x-0 ' +
+            'fixed inset-y-0 left-0 z-40 flex w-[276px] flex-col bg-[#0A0A0A] text-white transition-transform lg:translate-x-0 ' +
             (sidebarOpen ? 'translate-x-0' : '-translate-x-full')
           }
         >
-          <div className="flex h-20 items-center justify-between border-b border-slate-100 px-5 dark:border-white/10">
-            <div className="flex items-center gap-3">
-              <img
-                src="/bit-consulting-logo.webp"
-                alt="Bit Consulting"
-                className="h-11 w-[76px] object-contain"
-              />
-              <div className="border-l border-slate-200 pl-3 dark:border-white/15">
-                <p className="text-[15px] font-extrabold leading-none tracking-tight">
-                  Minha <span className="text-[#12bfc3]">Recepcionista</span>
-                </p>
-                <p className="mt-1 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                  WhatsApp com IA
-                </p>
-              </div>
-            </div>
+          <div className="flex h-20 items-center justify-between border-b border-white/10 px-5">
+            <ProductLogo tone="dark" />
             <button
-              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10 lg:hidden"
+              className="rounded-full p-2 text-white/60 hover:bg-white/10 lg:hidden"
               onClick={() => setSidebarOpen(false)}
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
-          <div className="mx-4 mt-4 rounded-xl border border-[#12bfc3]/20 bg-[#12bfc3]/[0.06] p-3 dark:bg-[#12bfc3]/10">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          <div className="mx-4 mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+            <p className="font-machine text-[10px] font-medium uppercase tracking-wider text-white/40">
               Empresa ativa
             </p>
             <button className="mt-1 flex w-full items-center justify-between text-left text-sm font-semibold">
-              {tenant.name} <ChevronDown className="h-4 w-4 text-slate-400" />
+              {tenant.name} <ChevronDown className="h-4 w-4 text-white/40" />
             </button>
           </div>
 
@@ -377,10 +361,10 @@ function DashboardApp() {
                   key={item.id}
                   onClick={() => selectView(item.id)}
                   className={
-                    'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ' +
+                    'flex w-full items-center gap-3 rounded-full px-3 py-2.5 text-sm font-semibold transition ' +
                     (selected
-                      ? 'bg-[#12bfc3] text-white shadow-lg shadow-[#12bfc3]/20'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/[0.07] dark:hover:text-white')
+                      ? 'bg-[#25D366] text-[#0A0A0A]'
+                      : 'text-white/65 hover:bg-white/[0.07] hover:text-white')
                   }
                 >
                   <Icon className="h-[18px] w-[18px]" />
@@ -390,10 +374,10 @@ function DashboardApp() {
                       className={
                         'rounded-full px-2 py-0.5 text-[10px] ' +
                         (selected
-                          ? 'bg-white/20 text-white'
+                          ? 'bg-[#0A0A0A] text-[#25D366]'
                           : item.id === 'attention'
-                            ? 'bg-amber-100 text-amber-700'
-                            : 'bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300')
+                            ? 'bg-[#25D366] text-[#0A0A0A]'
+                            : 'bg-white/10 text-white/70')
                       }
                     >
                       {item.badge}
@@ -404,20 +388,20 @@ function DashboardApp() {
             })}
           </nav>
 
-          <div className="border-t border-slate-100 p-4 dark:border-white/10">
-            <div className="rounded-xl bg-slate-50 p-3 dark:bg-white/[0.04]">
+          <div className="border-t border-white/10 p-4">
+            <div className="rounded-2xl bg-white/[0.04] p-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#43ae37] text-sm font-bold text-white">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#25D366] text-sm font-bold text-[#0A0A0A]">
                   {initials}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{displayName}</p>
-                  <p className="text-xs text-slate-400">{roleLabel}</p>
+                  <p className="text-xs text-white/45">{roleLabel}</p>
                 </div>
                 <button
                   type="button"
                   onClick={signOut}
-                  className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white"
+                  className="rounded-full p-2 text-white/45 transition hover:bg-white/10 hover:text-white"
                   aria-label="Sair da conta"
                   title="Sair da conta"
                 >
@@ -429,34 +413,34 @@ function DashboardApp() {
         </aside>
 
         <main className="min-h-screen lg:pl-[276px]">
-          <header className="sticky top-0 z-20 flex h-20 items-center gap-4 border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur-xl dark:border-white/10 dark:bg-[#071318]/90 sm:px-6 lg:px-8">
+          <header className="sticky top-0 z-20 flex h-20 items-center gap-4 border-b border-neutral-200/80 bg-white/90 px-4 backdrop-blur-xl dark:border-white/10 dark:bg-[#0A0A0A]/90 sm:px-6 lg:px-8">
             <button
-              className="rounded-xl border border-slate-200 p-2.5 text-slate-600 dark:border-white/10 dark:text-slate-200 lg:hidden"
+              className="rounded-full border border-neutral-200 p-2.5 text-neutral-600 dark:border-white/10 dark:text-neutral-200 lg:hidden"
               onClick={() => setSidebarOpen(true)}
             >
               <Menu className="h-5 w-5" />
             </button>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-[#12bfc3]">
+              <p className="font-machine text-[11px] font-medium uppercase tracking-[0.16em] text-[#128C7E] dark:text-[#25D366]">
                 Operação
               </p>
-              <h1 className="truncate text-xl font-bold tracking-tight sm:text-2xl">
+              <h1 className="truncate text-xl font-semibold tracking-[-0.03em] sm:text-2xl">
                 {currentLabel}
               </h1>
             </div>
             <div className="relative hidden md:block">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
               <input
-                className="h-10 w-64 rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm outline-none focus:border-[#12bfc3] dark:border-white/10 dark:bg-white/[0.05]"
+                className="h-10 w-64 rounded-full border border-neutral-200 bg-neutral-50 pl-10 pr-4 text-sm outline-none focus:border-[#25D366] dark:border-white/10 dark:bg-white/[0.05]"
                 placeholder="Buscar na plataforma..."
               />
             </div>
-            <button className="relative rounded-xl border border-slate-200 p-2.5 text-slate-500 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]">
+            <button className="relative rounded-full border border-neutral-200 p-2.5 text-neutral-500 hover:bg-neutral-50 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/[0.06]">
               <BellRing className="h-5 w-5" />
-              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#f6ca4b] ring-2 ring-white dark:ring-[#071318]" />
+              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#25D366] ring-2 ring-white dark:ring-[#0A0A0A]" />
             </button>
             <button
-              className="rounded-xl border border-slate-200 p-2.5 text-slate-500 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.06]"
+              className="rounded-full border border-neutral-200 p-2.5 text-neutral-500 hover:bg-neutral-50 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/[0.06]"
               onClick={() => setDark((value) => !value)}
               aria-label={dark ? 'Ativar modo claro' : 'Ativar modo escuro'}
             >
@@ -497,17 +481,17 @@ function Dashboard({ companyName }: { companyName: string }) {
     <div className="mx-auto max-w-[1600px] space-y-6">
       <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Bom dia, {firstName}</h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          <h2 className="text-2xl font-semibold tracking-[-0.03em] sm:text-3xl">Bom dia, {firstName}</h2>
+          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
             Acompanhe a operação da {companyName} em tempo real.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold dark:border-white/10 dark:bg-white/[0.04]">
-            <CalendarDays className="h-4 w-4 text-[#12bfc3]" /> Últimos 30 dias{' '}
-            <ChevronDown className="h-4 w-4 text-slate-400" />
+          <button className="flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2.5 text-sm font-semibold dark:border-white/10 dark:bg-white/[0.04]">
+            <CalendarDays className="h-4 w-4 text-[#128C7E]" /> Últimos 30 dias{' '}
+            <ChevronDown className="h-4 w-4 text-neutral-400" />
           </button>
-          <button className="rounded-xl bg-[#12bfc3] px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#12bfc3]/20">
+          <button className="rounded-full bg-[#25D366] px-4 py-2.5 text-sm font-bold text-[#0A0A0A]">
             Exportar relatório
           </button>
         </div>
@@ -519,10 +503,10 @@ function Dashboard({ companyName }: { companyName: string }) {
           return (
             <article
               key={metric.label}
-              className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#0b1c22]"
+              className="rounded-[24px] border border-neutral-200/80 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#141414]"
             >
               <div className="flex items-start justify-between">
-                <div className="rounded-xl bg-[#12bfc3]/10 p-2.5 text-[#0a9da0]">
+                <div className="rounded-xl bg-[#EAFBF0] p-2.5 text-[#128C7E] dark:bg-[#25D366]/10 dark:text-[#25D366]">
                   <Icon className="h-5 w-5" />
                 </div>
                 <span
@@ -537,19 +521,19 @@ function Dashboard({ companyName }: { companyName: string }) {
                   {metric.change}
                 </span>
               </div>
-              <p className="mt-5 text-3xl font-extrabold tracking-tight">{metric.value}</p>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{metric.label}</p>
+              <p className="mt-5 text-3xl font-semibold tracking-tight">{metric.value}</p>
+              <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">{metric.label}</p>
             </article>
           )
         })}
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.55fr_1fr]">
-        <article className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#0b1c22] sm:p-6">
+        <article className="rounded-[24px] border border-neutral-200/80 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#141414] sm:p-6">
           <div className="flex items-start justify-between">
             <div>
-              <h3 className="font-bold">Volume de conversas</h3>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              <h3 className="font-semibold tracking-[-0.01em]">Volume de conversas</h3>
+              <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
                 Recebidas e resolvidas nos últimos 30 dias
               </p>
             </div>
@@ -559,18 +543,18 @@ function Dashboard({ companyName }: { companyName: string }) {
             {barHeights.map((height, index) => (
               <div key={index} className="group flex h-full flex-1 items-end">
                 <div
-                  className="relative w-full rounded-t-md bg-[#12bfc3]/25 transition hover:bg-[#12bfc3]/40"
+                  className="relative w-full rounded-t-lg bg-[#0A0A0A]/[0.07] transition hover:bg-[#0A0A0A]/[0.12] dark:bg-white/10"
                   style={{ height: height + '%' }}
                 >
                   <div
-                    className="absolute inset-x-0 bottom-0 rounded-t-md bg-[#12bfc3]"
+                    className="absolute inset-x-0 bottom-0 rounded-t-lg bg-[#25D366]"
                     style={{ height: Math.max(30, height - 18) + '%' }}
                   />
                 </div>
               </div>
             ))}
           </div>
-          <div className="mt-3 flex justify-between text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          <div className="font-machine mt-3 flex justify-between text-[10px] font-medium uppercase tracking-wider text-neutral-400">
             <span>07 out.</span>
             <span>14 out.</span>
             <span>21 out.</span>
@@ -579,24 +563,24 @@ function Dashboard({ companyName }: { companyName: string }) {
           </div>
         </article>
 
-        <article className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#0b1c22] sm:p-6">
+        <article className="rounded-[24px] border border-neutral-200/80 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#141414] sm:p-6">
           <div className="flex items-start justify-between">
             <div>
-              <h3 className="font-bold">Qualidade da IA</h3>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              <h3 className="font-semibold tracking-[-0.01em]">Qualidade da IA</h3>
+              <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
                 Avaliação das conversas
               </p>
             </div>
-            <ShieldCheck className="h-5 w-5 text-[#43ae37]" />
+            <ShieldCheck className="h-5 w-5 text-[#128C7E]" />
           </div>
           <div className="mt-7 flex items-center gap-6">
             <div
               className="relative flex h-32 w-32 items-center justify-center rounded-full"
-              style={{ background: 'conic-gradient(#43ae37 0 92%, #e2e8f0 92% 100%)' }}
+              style={{ background: 'conic-gradient(#25D366 0 92%, #E5E5E5 92% 100%)' }}
             >
-              <div className="flex h-24 w-24 flex-col items-center justify-center rounded-full bg-white dark:bg-[#0b1c22]">
+              <div className="flex h-24 w-24 flex-col items-center justify-center rounded-full bg-white dark:bg-[#141414]">
                 <strong className="text-3xl">9,2</strong>
-                <span className="text-xs text-slate-400">de 10</span>
+                <span className="text-xs text-neutral-400">de 10</span>
               </div>
             </div>
             <div className="flex-1 space-y-3">
@@ -607,11 +591,11 @@ function Dashboard({ companyName }: { companyName: string }) {
               ].map(([label, value]) => (
                 <div key={label}>
                   <div className="mb-1 flex justify-between text-xs">
-                    <span className="text-slate-500 dark:text-slate-400">{label}</span>
+                    <span className="text-neutral-500 dark:text-neutral-400">{label}</span>
                     <strong>{value}</strong>
                   </div>
-                  <div className="h-1.5 rounded-full bg-slate-100 dark:bg-white/10">
-                    <div className="h-1.5 rounded-full bg-[#43ae37]" style={{ width: value }} />
+                  <div className="h-1.5 rounded-full bg-neutral-100 dark:bg-white/10">
+                    <div className="h-1.5 rounded-full bg-[#25D366]" style={{ width: value }} />
                   </div>
                 </div>
               ))}
@@ -624,19 +608,19 @@ function Dashboard({ companyName }: { companyName: string }) {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-        <article className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-white/10 dark:bg-[#0b1c22]">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-white/10">
+        <article className="overflow-hidden rounded-[24px] border border-neutral-200/80 bg-white shadow-sm dark:border-white/10 dark:bg-[#141414]">
+          <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4 dark:border-white/10">
             <div>
-              <h3 className="font-bold">Precisa de você</h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <h3 className="font-semibold tracking-[-0.01em]">Precisa de você</h3>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">
                 Conversas aguardando ação humana
               </p>
             </div>
-            <button className="text-sm font-bold text-[#0aa6aa]">Ver fila completa</button>
+            <button className="text-sm font-bold text-[#128C7E]">Ver fila completa</button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[620px] text-left text-sm">
-              <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-400 dark:bg-white/[0.03]">
+              <thead className="font-machine bg-neutral-50 text-[11px] uppercase tracking-wider text-neutral-400 dark:bg-white/[0.03]">
                 <tr>
                   <th className="px-5 py-3">Cliente</th>
                   <th className="px-4 py-3">Motivo</th>
@@ -649,10 +633,10 @@ function Dashboard({ companyName }: { companyName: string }) {
                 {attentionRows.slice(0, 3).map((row) => (
                   <tr
                     key={row.client}
-                    className="border-t border-slate-100 dark:border-white/[0.07]"
+                    className="border-t border-neutral-100 dark:border-white/[0.07]"
                   >
                     <td className="px-5 py-4 font-semibold">{row.client}</td>
-                    <td className="px-4 py-4 text-slate-500 dark:text-slate-400">{row.reason}</td>
+                    <td className="px-4 py-4 text-neutral-500 dark:text-neutral-400">{row.reason}</td>
                     <td className="px-4 py-4 font-mono text-xs">{row.wait}</td>
                     <td className="px-4 py-4">
                       <StatusPill tone={row.priority === 'Alta' ? 'danger' : 'warning'}>
@@ -660,7 +644,7 @@ function Dashboard({ companyName }: { companyName: string }) {
                       </StatusPill>
                     </td>
                     <td className="px-5 py-4 text-right">
-                      <button className="rounded-lg bg-[#12bfc3] px-3 py-2 text-xs font-bold text-white">
+                      <button className="rounded-full bg-[#25D366] px-3 py-2 text-xs font-bold text-[#0A0A0A]">
                         Assumir
                       </button>
                     </td>
@@ -670,15 +654,15 @@ function Dashboard({ companyName }: { companyName: string }) {
             </table>
           </div>
         </article>
-        <article className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#0b1c22]">
+        <article className="rounded-[24px] border border-neutral-200/80 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#141414]">
           <div className="flex items-start justify-between">
             <div>
-              <h3 className="font-bold">Resultado do mês</h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <h3 className="font-semibold tracking-[-0.01em]">Resultado do mês</h3>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">
                 Impacto atribuído à recepcionista
               </p>
             </div>
-            <BarChart3 className="h-5 w-5 text-[#12bfc3]" />
+            <BarChart3 className="h-5 w-5 text-[#128C7E]" />
           </div>
           <div className="mt-6 space-y-5">
             {[
@@ -689,8 +673,8 @@ function Dashboard({ companyName }: { companyName: string }) {
             ].map(([label, value, change]) => (
               <div key={label} className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">{label}</p>
-                  <p className="mt-0.5 text-xl font-extrabold">{value}</p>
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">{label}</p>
+                  <p className="mt-0.5 text-xl font-semibold">{value}</p>
                 </div>
                 <StatusPill tone="success">{change}</StatusPill>
               </div>
@@ -707,23 +691,23 @@ function AttentionView() {
     <div className="mx-auto max-w-[1600px] space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Fila Precisa de Você</h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          <h2 className="text-2xl font-semibold tracking-[-0.03em]">Fila Precisa de Você</h2>
+          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
             Priorize as conversas que exigem intervenção humana.
           </p>
         </div>
         <div className="flex gap-2">
           <StatusPill tone="danger">2 próximas do SLA</StatusPill>
-          <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold dark:border-white/10 dark:bg-white/[0.04]">
+          <button className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold dark:border-white/10 dark:bg-white/[0.04]">
             <Filter className="mr-2 inline h-4 w-4" />
             Filtros
           </button>
         </div>
       </div>
-      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-white/10 dark:bg-[#0b1c22]">
+      <div className="overflow-hidden rounded-[24px] border border-neutral-200/80 bg-white shadow-sm dark:border-white/10 dark:bg-[#141414]">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-left text-sm">
-            <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-400 dark:bg-white/[0.03]">
+            <thead className="font-machine bg-neutral-50 text-[11px] uppercase tracking-wider text-neutral-400 dark:bg-white/[0.03]">
               <tr>
                 <th className="px-6 py-4">Cliente</th>
                 <th className="px-4 py-4">Recepcionista</th>
@@ -736,24 +720,24 @@ function AttentionView() {
             </thead>
             <tbody>
               {attentionRows.map((row) => (
-                <tr key={row.client} className="border-t border-slate-100 dark:border-white/[0.07]">
+                <tr key={row.client} className="border-t border-neutral-100 dark:border-white/[0.07]">
                   <td className="px-6 py-5 font-bold">{row.client}</td>
                   <td className="px-4 py-5">
                     <span className="inline-flex items-center gap-2">
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#12bfc3]/15 text-xs font-bold text-[#0a9da0]">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#EAFBF0] text-xs font-bold text-[#128C7E] dark:bg-[#25D366]/10 dark:text-[#25D366]">
                         {row.agent[0]}
                       </span>
                       {row.agent}
                     </span>
                   </td>
-                  <td className="px-4 py-5 text-slate-500 dark:text-slate-400">{row.reason}</td>
+                  <td className="px-4 py-5 text-neutral-500 dark:text-neutral-400">{row.reason}</td>
                   <td className="px-4 py-5 font-mono">{row.wait}</td>
                   <td className="px-4 py-5">
                     <span
                       className={
                         row.sla === '3 min'
                           ? 'font-bold text-rose-600'
-                          : 'font-semibold text-slate-600 dark:text-slate-300'
+                          : 'font-semibold text-neutral-600 dark:text-neutral-300'
                       }
                     >
                       {row.sla}
@@ -773,10 +757,10 @@ function AttentionView() {
                     </StatusPill>
                   </td>
                   <td className="px-6 py-5 text-right">
-                    <button className="mr-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-white/10">
+                    <button className="mr-2 rounded-full border border-neutral-200 px-3 py-2 text-xs font-bold dark:border-white/10">
                       Delegar
                     </button>
-                    <button className="rounded-lg bg-[#12bfc3] px-3 py-2 text-xs font-bold text-white">
+                    <button className="rounded-full bg-[#25D366] px-3 py-2 text-xs font-bold text-[#0A0A0A]">
                       Assumir
                     </button>
                   </td>
@@ -795,12 +779,12 @@ function AgentsView() {
     <div className="mx-auto max-w-[1600px] space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Estúdio de recepcionistas</h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          <h2 className="text-2xl font-semibold tracking-[-0.03em]">Estúdio de recepcionistas</h2>
+          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
             Configure personalidade, conhecimento, regras e autonomia.
           </p>
         </div>
-        <button className="flex items-center justify-center gap-2 rounded-xl bg-[#12bfc3] px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-[#12bfc3]/20">
+        <button className="flex items-center justify-center gap-2 rounded-full bg-[#25D366] px-4 py-2.5 text-sm font-bold text-[#0A0A0A]">
           <Plus className="h-4 w-4" />
           Nova recepcionista
         </button>
@@ -809,13 +793,13 @@ function AgentsView() {
         {receptionistCards.map((agent, index) => (
           <article
             key={agent.name}
-            className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#0b1c22]"
+            className="rounded-[24px] border border-neutral-200/80 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#141414]"
           >
             <div className="flex items-start justify-between">
               <div
                 className={
-                  'flex h-12 w-12 items-center justify-center rounded-2xl text-lg font-extrabold text-white ' +
-                  (index === 0 ? 'bg-[#12bfc3]' : index === 1 ? 'bg-[#43ae37]' : 'bg-slate-400')
+                  'flex h-12 w-12 items-center justify-center rounded-full text-lg font-semibold ' +
+                  (index === 0 ? 'bg-[#25D366] text-[#0A0A0A]' : index === 1 ? 'bg-[#0A0A0A] text-[#25D366] dark:bg-white dark:text-[#0A0A0A]' : 'bg-neutral-200 text-neutral-500')
                 }
               >
                 {agent.name[0]}
@@ -824,47 +808,47 @@ function AgentsView() {
                 {agent.status}
               </StatusPill>
             </div>
-            <h3 className="mt-4 text-xl font-extrabold">{agent.name}</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">{agent.area}</p>
-            <div className="mt-5 grid grid-cols-3 gap-3 border-y border-slate-100 py-4 text-center dark:border-white/10">
+            <h3 className="mt-4 text-xl font-semibold">{agent.name}</h3>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">{agent.area}</p>
+            <div className="mt-5 grid grid-cols-3 gap-3 border-y border-neutral-100 py-4 text-center dark:border-white/10">
               <div>
-                <p className="font-extrabold">{agent.conversations}</p>
-                <p className="text-[10px] uppercase text-slate-400">Conversas</p>
+                <p className="font-semibold">{agent.conversations}</p>
+                <p className="text-[10px] uppercase text-neutral-400">Conversas</p>
               </div>
               <div>
-                <p className="font-extrabold">{agent.quality}</p>
-                <p className="text-[10px] uppercase text-slate-400">Qualidade</p>
+                <p className="font-semibold">{agent.quality}</p>
+                <p className="text-[10px] uppercase text-neutral-400">Qualidade</p>
               </div>
               <div>
-                <p className="font-extrabold">{agent.version}</p>
-                <p className="text-[10px] uppercase text-slate-400">Versão</p>
+                <p className="font-semibold">{agent.version}</p>
+                <p className="text-[10px] uppercase text-neutral-400">Versão</p>
               </div>
             </div>
             <div className="mt-4 flex gap-2">
-              <button className="flex-1 rounded-xl bg-slate-900 py-2.5 text-sm font-bold text-white dark:bg-white dark:text-slate-900">
+              <button className="flex-1 rounded-full bg-[#0A0A0A] py-2.5 text-sm font-bold text-white dark:bg-white dark:text-neutral-900">
                 Configurar
               </button>
-              <button className="rounded-xl border border-slate-200 p-2.5 dark:border-white/10">
+              <button className="rounded-full border border-neutral-200 p-2.5 dark:border-white/10">
                 <MoreHorizontal className="h-4 w-4" />
               </button>
             </div>
           </article>
         ))}
       </div>
-      <section className="rounded-2xl border border-[#12bfc3]/25 bg-gradient-to-r from-[#12bfc3]/10 via-white to-[#43ae37]/10 p-6 dark:via-[#0b1c22] lg:flex lg:items-center lg:justify-between">
+      <section className="rounded-[28px] bg-[#0A0A0A] p-6 text-white sm:p-8 lg:flex lg:items-center lg:justify-between">
         <div className="flex items-start gap-4">
-          <div className="rounded-2xl bg-[#12bfc3] p-3 text-white">
+          <div className="rounded-full bg-[#25D366] p-3 text-[#0A0A0A]">
             <Zap className="h-6 w-6" />
           </div>
           <div>
-            <h3 className="font-bold">Simulador antes da publicação</h3>
-            <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-300">
+            <h3 className="font-semibold tracking-[-0.01em]">Simulador antes da publicação</h3>
+            <p className="mt-1 max-w-2xl text-sm text-white/60">
               Teste preços, reclamações, urgências, pedidos de atendimento humano e tentativas de
               manipulação antes de colocar uma nova versão no ar.
             </p>
           </div>
         </div>
-        <button className="mt-4 rounded-xl border border-[#12bfc3] px-4 py-2.5 text-sm font-bold text-[#0aa6aa] lg:mt-0">
+        <button className="mt-4 shrink-0 rounded-full bg-[#25D366] px-5 py-2.5 text-sm font-semibold text-[#0A0A0A] transition hover:bg-[#1EBE5A] lg:mt-0">
           Abrir simulador
         </button>
       </section>
@@ -877,47 +861,47 @@ function KnowledgeView() {
     <div className="mx-auto max-w-[1600px] space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Base de conhecimento</h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          <h2 className="text-2xl font-semibold tracking-[-0.03em]">Base de conhecimento</h2>
+          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
             Fontes verificadas usadas nas respostas da IA.
           </p>
         </div>
-        <button className="flex items-center gap-2 rounded-xl bg-[#12bfc3] px-4 py-2.5 text-sm font-bold text-white">
+        <button className="flex items-center gap-2 rounded-full bg-[#25D366] px-4 py-2.5 text-sm font-bold text-[#0A0A0A]">
           <UploadCloud className="h-4 w-4" />
           Adicionar fonte
         </button>
       </div>
       <div className="grid gap-4 sm:grid-cols-3">
-        <article className="rounded-2xl border border-slate-200/80 bg-white p-5 dark:border-white/10 dark:bg-[#0b1c22]">
-          <p className="text-sm text-slate-500 dark:text-slate-400">Fontes ativas</p>
-          <p className="mt-1 text-3xl font-extrabold">18</p>
+        <article className="rounded-[24px] border border-neutral-200/80 bg-white p-5 dark:border-white/10 dark:bg-[#141414]">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">Fontes ativas</p>
+          <p className="mt-1 text-3xl font-semibold">18</p>
         </article>
-        <article className="rounded-2xl border border-slate-200/80 bg-white p-5 dark:border-white/10 dark:bg-[#0b1c22]">
-          <p className="text-sm text-slate-500 dark:text-slate-400">Trechos indexados</p>
-          <p className="mt-1 text-3xl font-extrabold">1.426</p>
+        <article className="rounded-[24px] border border-neutral-200/80 bg-white p-5 dark:border-white/10 dark:bg-[#141414]">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">Trechos indexados</p>
+          <p className="mt-1 text-3xl font-semibold">1.426</p>
         </article>
-        <article className="rounded-2xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-400/20 dark:bg-amber-400/10">
+        <article className="rounded-[24px] border border-amber-200 bg-amber-50 p-5 dark:border-amber-400/20 dark:bg-amber-400/10">
           <p className="text-sm text-amber-700 dark:text-amber-300">Revisões pendentes</p>
-          <p className="mt-1 text-3xl font-extrabold text-amber-800 dark:text-amber-200">2</p>
+          <p className="mt-1 text-3xl font-semibold text-amber-800 dark:text-amber-200">2</p>
         </article>
       </div>
-      <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-white/10 dark:bg-[#0b1c22]">
-        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 dark:border-white/10 sm:flex-row">
+      <div className="overflow-hidden rounded-[24px] border border-neutral-200/80 bg-white shadow-sm dark:border-white/10 dark:bg-[#141414]">
+        <div className="flex flex-col gap-3 border-b border-neutral-100 p-4 dark:border-white/10 sm:flex-row">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
             <input
-              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm dark:border-white/10 dark:bg-white/[0.04]"
+              className="h-10 w-full rounded-xl border border-neutral-200 bg-neutral-50 pl-10 pr-4 text-sm dark:border-white/10 dark:bg-white/[0.04]"
               placeholder="Buscar fonte, categoria ou responsável..."
             />
           </div>
-          <button className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold dark:border-white/10">
+          <button className="rounded-full border border-neutral-200 px-4 py-2 text-sm font-semibold dark:border-white/10">
             <Filter className="mr-2 inline h-4 w-4" />
             Filtrar
           </button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-400 dark:bg-white/[0.03]">
+            <thead className="font-machine bg-neutral-50 text-[11px] uppercase tracking-wider text-neutral-400 dark:bg-white/[0.03]">
               <tr>
                 <th className="px-6 py-4">Fonte</th>
                 <th className="px-4 py-4">Categoria</th>
@@ -929,17 +913,17 @@ function KnowledgeView() {
             </thead>
             <tbody>
               {knowledgeRows.map((row) => (
-                <tr key={row.source} className="border-t border-slate-100 dark:border-white/[0.07]">
+                <tr key={row.source} className="border-t border-neutral-100 dark:border-white/[0.07]">
                   <td className="px-6 py-5">
                     <div className="flex items-center gap-3">
-                      <div className="rounded-lg bg-[#12bfc3]/10 p-2 text-[#0a9da0]">
+                      <div className="rounded-lg bg-[#EAFBF0] p-2 text-[#128C7E] dark:bg-[#25D366]/10 dark:text-[#25D366]">
                         <FileText className="h-5 w-5" />
                       </div>
                       <span className="font-semibold">{row.source}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-5 text-slate-500 dark:text-slate-400">{row.category}</td>
-                  <td className="px-4 py-5 text-slate-500 dark:text-slate-400">{row.updated}</td>
+                  <td className="px-4 py-5 text-neutral-500 dark:text-neutral-400">{row.category}</td>
+                  <td className="px-4 py-5 text-neutral-500 dark:text-neutral-400">{row.updated}</td>
                   <td className="px-4 py-5">{row.pages} itens</td>
                   <td className="px-4 py-5">
                     <StatusPill tone={row.status === 'Ativo' ? 'success' : 'warning'}>
@@ -947,7 +931,7 @@ function KnowledgeView() {
                     </StatusPill>
                   </td>
                   <td className="px-6 py-5 text-right">
-                    <button className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-white/10">
+                    <button className="rounded-lg p-2 hover:bg-neutral-100 dark:hover:bg-white/10">
                       <MoreHorizontal className="h-4 w-4" />
                     </button>
                   </td>
@@ -1007,20 +991,20 @@ function ModuleView({ id }: { id: ViewId }) {
   const Icon = module.icon
   return (
     <div className="mx-auto max-w-[1200px]">
-      <section className="rounded-3xl border border-slate-200/80 bg-white p-8 shadow-sm dark:border-white/10 dark:bg-[#0b1c22] sm:p-12">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#12bfc3]/12 text-[#0a9da0]">
+      <section className="rounded-[28px] border border-neutral-200/80 bg-white p-8 shadow-sm dark:border-white/10 dark:bg-[#141414] sm:p-12">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#EAFBF0] text-[#128C7E] dark:bg-[#25D366]/10 dark:text-[#25D366]">
           <Icon className="h-7 w-7" />
         </div>
-        <h2 className="mt-6 text-3xl font-extrabold tracking-tight">{module.title}</h2>
-        <p className="mt-2 max-w-2xl text-slate-500 dark:text-slate-400">{module.description}</p>
+        <h2 className="mt-6 text-3xl font-semibold tracking-tight">{module.title}</h2>
+        <p className="mt-2 max-w-2xl text-neutral-500 dark:text-neutral-400">{module.description}</p>
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           {module.cards.map((card, index) => (
             <article
               key={card}
-              className="rounded-2xl border border-slate-200 p-5 dark:border-white/10"
+              className="rounded-[24px] border border-neutral-200 p-5 dark:border-white/10"
             >
               <div className="flex items-start justify-between">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#12bfc3]/10 text-sm font-extrabold text-[#0a9da0]">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EAFBF0] text-sm font-semibold text-[#128C7E] dark:bg-[#25D366]/10 dark:text-[#25D366]">
                   {index + 1}
                 </span>
                 {index === 0 ? (
@@ -1030,16 +1014,16 @@ function ModuleView({ id }: { id: ViewId }) {
                 )}
               </div>
               <h3 className="mt-5 font-bold">{card}</h3>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
                 Configuração preparada para evolução modular e segura.
               </p>
-              <button className="mt-5 text-sm font-bold text-[#0aa6aa]">
+              <button className="mt-5 text-sm font-bold text-[#128C7E]">
                 Abrir módulo <ArrowUpRight className="ml-1 inline h-4 w-4" />
               </button>
             </article>
           ))}
         </div>
-        <div className="mt-8 flex items-start gap-3 rounded-2xl border border-[#f6ca4b]/50 bg-[#f6ca4b]/10 p-4 text-sm">
+        <div className="mt-8 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-400/20 dark:bg-amber-400/10">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
           <p>
             <strong>Estrutura do MVP:</strong> este módulo está pronto para receber dados reais do
@@ -1083,13 +1067,9 @@ function AuthenticatedApp() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f4fbfa] text-slate-700 dark:bg-[#071318] dark:text-slate-200">
+      <div className="flex min-h-screen items-center justify-center bg-[#F5F5F5] text-neutral-700 dark:bg-[#0A0A0A] dark:text-neutral-200">
         <div className="text-center">
-          <img
-            src="/bit-consulting-logo.webp"
-            alt="Bit Consulting"
-            className="mx-auto h-16 w-32 object-contain"
-          />
+          <ProductLogo tone="light" className="justify-center dark:[&>span]:text-white" />
           <p className="mt-4 text-sm font-semibold">Carregando ambiente seguro...</p>
         </div>
       </div>
@@ -1098,94 +1078,130 @@ function AuthenticatedApp() {
 
   if (user) return <DashboardApp key={user.id} />
 
+  const inputClass =
+    'w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3.5 text-[15px] outline-none transition placeholder:text-neutral-400 focus:border-[#0A0A0A] focus:ring-4 focus:ring-[#25D366]/25 dark:border-white/10 dark:bg-white/[0.05] dark:focus:border-[#25D366]'
   return (
     <div className={loginDark ? 'dark' : ''}>
-      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#effaf9] px-4 py-10 text-slate-900 transition-colors dark:bg-[#071318] dark:text-slate-100">
-        <div className="absolute left-[-10%] top-[-20%] h-96 w-96 rounded-full bg-[#12bfc3]/15 blur-3xl" />
-        <div className="absolute bottom-[-20%] right-[-10%] h-96 w-96 rounded-full bg-[#43ae37]/10 blur-3xl" />
-
-        <button
-          type="button"
-          onClick={() => setLoginDark((value) => !value)}
-          className="absolute right-5 top-5 rounded-xl border border-slate-200 bg-white/80 p-3 text-slate-600 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-200"
-          aria-label={loginDark ? 'Ativar modo claro' : 'Ativar modo escuro'}
-        >
-          {loginDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-        </button>
-
-        <section className="relative w-full max-w-md rounded-[28px] border border-white/80 bg-white/90 p-7 shadow-2xl shadow-[#0a6b6d]/10 backdrop-blur-xl dark:border-white/10 dark:bg-[#0b1c22]/95 dark:shadow-black/30 sm:p-9">
-          <div className="flex flex-col items-center text-center">
-            <img
-              src="/bit-consulting-logo.webp"
-              alt="Bit Consulting"
-              className="h-20 w-40 object-contain"
-            />
-            <p className="mt-5 text-[11px] font-extrabold uppercase tracking-[0.22em] text-[#0aa6aa]">
-              WhatsApp com IA
-            </p>
-            <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Minha Recepcionista</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-              Acesse o ambiente seguro da sua operação.
-            </p>
+      <main className="grid min-h-screen bg-white text-[#0A0A0A] transition-colors dark:bg-[#0A0A0A] dark:text-white lg:grid-cols-[1.05fr_1fr]">
+        <aside className="relative hidden overflow-hidden bg-[#0A0A0A] p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-14">
+          <div className="pointer-events-none absolute -right-32 top-24 h-[520px] w-[520px] rounded-full bg-[#25D366]/[0.14] blur-[110px]" />
+          <a href="/" className="relative w-fit">
+            <ProductLogo tone="dark" />
+          </a>
+          <div className="relative">
+            <h2 className="max-w-lg font-landing text-[clamp(2.4rem,4vw,3.6rem)] font-semibold leading-[0.98] tracking-[-0.045em]">
+              Seu WhatsApp trabalhando por você.
+              <span className="mt-2 block font-human text-[1.08em] font-normal italic tracking-[-0.02em] text-[#25D366]">
+                24 horas por dia.
+              </span>
+            </h2>
+            <div className="mt-10 flex max-w-xl items-end gap-5">
+              <HeroReveal lensRadius={90} hint="Passe o mouse" className="w-[240px] shrink-0 rounded-[28px] xl:w-[270px]" />
+              <div className="space-y-2 pb-6">
+                <p className="w-fit max-w-[15rem] rounded-2xl rounded-bl-md bg-white px-3.5 py-2.5 text-[13px] leading-snug text-[#0A0A0A]">
+                  Oi! Vocês têm horário amanhã?
+                </p>
+                <p className="ml-6 w-fit max-w-[15rem] rounded-2xl rounded-br-md bg-[#D9FDD3] px-3.5 py-2.5 text-[13px] leading-snug text-[#0A0A0A]">
+                  Temos sim, às 9h ou 14h. Qual fica melhor?
+                </p>
+              </div>
+            </div>
           </div>
+          <p className="relative font-machine text-[10px] uppercase tracking-[0.16em] text-white/40">
+            Um produto Bit Consulting e AI.R Innovation
+          </p>
+        </aside>
 
-          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-            <div>
-              <label htmlFor="login-email" className="mb-2 block text-sm font-bold">
-                E-mail
-              </label>
-              <input
-                id="login-email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="seu@email.com"
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#12bfc3] focus:ring-4 focus:ring-[#12bfc3]/10 dark:border-white/10 dark:bg-white/[0.05]"
-              />
-            </div>
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <label htmlFor="login-password" className="text-sm font-bold">
-                  Senha
-                </label>
-                <span className="text-xs font-semibold text-slate-400">Acesso administrativo</span>
-              </div>
-              <input
-                id="login-password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Digite sua senha"
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-[#12bfc3] focus:ring-4 focus:ring-[#12bfc3]/10 dark:border-white/10 dark:bg-white/[0.05]"
-              />
-            </div>
+        <section className="relative flex items-center justify-center px-5 py-12 sm:px-10">
+          <button
+            type="button"
+            onClick={() => setLoginDark((value) => !value)}
+            className="absolute right-5 top-5 rounded-full border border-neutral-200 p-3 text-neutral-600 transition hover:border-[#0A0A0A] dark:border-white/10 dark:text-neutral-200 dark:hover:border-[#25D366]"
+            aria-label={loginDark ? 'Ativar modo claro' : 'Ativar modo escuro'}
+          >
+            {loginDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </button>
 
-            {error && (
-              <div
-                role="alert"
-                className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 dark:border-red-400/20 dark:bg-red-400/10 dark:text-red-300"
-              >
-                {error}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex w-full items-center justify-center rounded-xl bg-[#12bfc3] px-4 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-[#12bfc3]/25 transition hover:bg-[#0aaeb2] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {submitting ? 'Entrando...' : 'Entrar no sistema'}
-            </button>
-          </form>
-
-          <div className="mt-6 flex items-start gap-3 rounded-xl bg-[#12bfc3]/[0.07] p-4 text-xs leading-5 text-slate-600 dark:bg-[#12bfc3]/10 dark:text-slate-300">
-            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#0aa6aa]" />
-            <p>
-              O acesso é restrito a usuários cadastrados. Novos membros serão convidados por um
-              administrador.
+          <div className="w-full max-w-[400px]">
+            <a href="/" className="mb-10 block w-fit lg:hidden">
+              <ProductLogo tone={loginDark ? 'dark' : 'light'} />
+            </a>
+            <p className="font-machine text-[11px] uppercase tracking-[0.18em] text-[#128C7E] dark:text-[#25D366]">
+              Área do cliente
             </p>
+            <h1 className="mt-3 font-landing text-[2.2rem] font-semibold leading-[1.02] tracking-[-0.04em]">
+              Acesse sua{' '}
+              <span className="font-human text-[1.12em] font-normal italic tracking-[-0.01em] text-[#128C7E] dark:text-[#25D366]">
+                operação.
+              </span>
+            </h1>
+            <p className="mt-3 text-[15px] leading-relaxed text-neutral-500 dark:text-neutral-400">
+              Entre para acompanhar conversas, recepcionistas e resultados.
+            </p>
+
+            <form onSubmit={handleSubmit} className="mt-9 space-y-5">
+              <div>
+                <label htmlFor="login-email" className="mb-2 block text-sm font-semibold">
+                  E-mail
+                </label>
+                <input
+                  id="login-email"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="seu@email.com"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label htmlFor="login-password" className="text-sm font-semibold">
+                    Senha
+                  </label>
+                  <span className="font-machine text-[10px] uppercase tracking-[0.12em] text-neutral-400">
+                    Acesso administrativo
+                  </span>
+                </div>
+                <input
+                  id="login-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Digite sua senha"
+                  className={inputClass}
+                />
+              </div>
+
+              {error && (
+                <div
+                  role="alert"
+                  className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 dark:border-red-400/20 dark:bg-red-400/10 dark:text-red-300"
+                >
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="group flex w-full items-center justify-center gap-2 rounded-full bg-[#25D366] px-5 py-4 text-[15px] font-semibold text-[#0A0A0A] transition hover:bg-[#1EBE5A] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {submitting ? 'Entrando...' : 'Entrar no sistema'}
+                {!submitting && (
+                  <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                )}
+              </button>
+            </form>
+
+            <div className="mt-8 flex items-start gap-3 rounded-2xl bg-[#F5F5F5] p-4 text-[13px] leading-5 text-neutral-600 dark:bg-white/[0.04] dark:text-neutral-300">
+              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#128C7E] dark:text-[#25D366]" />
+              <p>
+                O acesso é restrito a usuários cadastrados. Novos membros serão convidados por um
+                administrador.
+              </p>
+            </div>
           </div>
         </section>
       </main>

@@ -58,8 +58,8 @@ export default function Layout() {
 
   if (!user) {
     return (
-      <div className="flex min-h-screen flex-col bg-slate-50">
-        <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
+      <div className="flex min-h-screen flex-col bg-neutral-50">
+        <header className="sticky top-0 z-50 w-full border-b border-neutral-200/80 bg-white/90 backdrop-blur-xl">
           <div className="mx-auto flex h-20 w-full max-w-[1400px] items-center justify-between px-4 sm:px-8">
             <Link to="/" aria-label="BitZaap - página inicial">
               <BrandLogo compact />
@@ -69,7 +69,7 @@ export default function Layout() {
                 <Link to="/login">Entrar</Link>
               </Button>
               <Button
-                className="h-9 bg-brand-500 px-3 text-xs hover:bg-brand-600 shadow-sm shadow-brand-500/20 sm:h-10 sm:px-4 sm:text-sm"
+                className="h-9 bg-brand-500 px-3 text-xs hover:bg-[#1EBE5A] sm:h-10 sm:px-4 sm:text-sm"
                 asChild
               >
                 <Link to="/register">Começar Agora</Link>
@@ -100,12 +100,12 @@ export default function Layout() {
 
   return (
     <SidebarProvider>
-      <Sidebar variant="inset" className="border-r border-slate-200/70 bg-white">
+      <Sidebar variant="inset" className="border-r border-neutral-200/70 bg-white">
         <SidebarHeader className="px-4 pb-5 pt-5">
           <BrandLogo compact className="scale-[0.92] origin-left" />
         </SidebarHeader>
         <SidebarContent className="px-3 pt-2">
-          <div className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+          <div className="font-machine px-2 pb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-400">
             Workspace
           </div>
           <SidebarMenu className="gap-0.5">
@@ -193,7 +193,7 @@ export default function Layout() {
       <SidebarInset className="bg-zinc-50/60">
         <header className="flex h-16 shrink-0 items-center gap-3 border-b border-zinc-200/70 bg-white px-4 md:hidden">
           <SidebarTrigger />
-          <span className="font-extrabold tracking-[-0.04em] text-bit-navy">
+          <span className="font-semibold tracking-[-0.04em] text-bit-navy">
             Bit<span className="text-brand-500">Zaap</span>
           </span>
         </header>
