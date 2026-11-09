@@ -656,7 +656,7 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
               />
             )
           ) : (
-            <div className="w-48 h-32 bg-slate-200/50 animate-pulse rounded-lg flex items-center justify-center text-slate-400 text-xs">
+            <div className="w-48 h-32 bg-neutral-200/50 animate-pulse rounded-lg flex items-center justify-center text-neutral-400 text-xs">
               Mídia não encontrada
             </div>
           )}
@@ -675,7 +675,7 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
               <source src={fileUrl} type={msg.mime_type || 'audio/ogg'} />
             </audio>
           ) : (
-            <div className="flex items-center gap-2 text-slate-500 text-sm">
+            <div className="flex items-center gap-2 text-neutral-500 text-sm">
               <FileAudio className="h-4 w-4" /> Áudio indisponível
             </div>
           )}
@@ -689,15 +689,15 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
           <div
             className={cn(
               'flex items-center gap-3 p-3 rounded-lg border',
-              isOut ? 'bg-emerald-100/50 border-emerald-200' : 'bg-slate-100 border-slate-200',
+              isOut ? 'bg-emerald-100/50 border-emerald-200' : 'bg-neutral-100 border-neutral-200',
             )}
           >
             <FileText className="h-8 w-8 text-emerald-600 shrink-0" />
             <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-medium truncate text-slate-700">
+              <p className="text-sm font-medium truncate text-neutral-700">
                 {msg.file_name || 'Documento'}
               </p>
-              <p className="text-xs text-slate-500 uppercase">
+              <p className="text-xs text-neutral-500 uppercase">
                 {msg.mime_type?.split('/')[1] || 'FILE'}
               </p>
             </div>
@@ -706,7 +706,7 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
                 href={fileUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 bg-white rounded-full shadow-sm hover:bg-slate-50 transition-colors"
+                className="p-2 bg-white rounded-full shadow-sm hover:bg-neutral-50 transition-colors"
                 title="Baixar documento"
               >
                 <Download className="h-4 w-4 text-emerald-600" />
@@ -724,7 +724,7 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
   }
 
   return (
-    <div className="flex h-[calc(100dvh-160px)] min-h-[420px] w-full overflow-hidden bg-zinc-50/60 dark:bg-[#0b1c22]">
+    <div className="flex h-[calc(100dvh-160px)] min-h-[420px] w-full overflow-hidden bg-zinc-50/60 dark:bg-[#141414]">
       {/* Sidebar Contacts */}
       <div
         className={cn(
@@ -785,7 +785,7 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
               <Button
                 size="sm"
                 onClick={onConnectionSetup}
-                className="h-8 px-3 text-xs font-medium bg-brand-500 hover:bg-brand-600 text-white shadow-sm shadow-brand-500/20 shrink-0"
+                className="h-8 px-3 text-xs font-medium bg-brand-500 hover:bg-[#1EBE5A] text-[#0A0A0A] shrink-0"
               >
                 Conectar WhatsApp
               </Button>
@@ -1212,7 +1212,7 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
                     <Button
                       type="submit"
                       size="icon"
-                      className="h-11 w-11 rounded-full bg-brand-500 hover:bg-brand-600 shrink-0 shadow-sm shadow-brand-500/30"
+                      className="h-11 w-11 rounded-full bg-brand-500 hover:bg-[#1EBE5A] shrink-0"
                       disabled={instance?.status !== 'connected'}
                     >
                       <Send className="h-[18px] w-[18px] ml-0.5" />
@@ -1221,7 +1221,7 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
                     <Button
                       type="button"
                       size="icon"
-                      className="h-11 w-11 rounded-full bg-brand-500 hover:bg-brand-600 shrink-0 shadow-sm shadow-brand-500/30"
+                      className="h-11 w-11 rounded-full bg-brand-500 hover:bg-[#1EBE5A] shrink-0"
                       disabled={instance?.status !== 'connected'}
                       onClick={startRecording}
                     >

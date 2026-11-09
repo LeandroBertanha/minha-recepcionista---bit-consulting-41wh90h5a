@@ -68,7 +68,7 @@ export default function Agents() {
                   setSelectedAgent(null)
                   setIsFormOpen(true)
                 }}
-                className="bg-brand-500 hover:bg-brand-600 text-white shadow-sm shadow-brand-500/20 h-9 px-3.5 text-[13px] font-medium"
+                className="bg-brand-500 hover:bg-[#1EBE5A] text-[#0A0A0A] h-9 px-3.5 text-[13px] font-medium"
               >
                 <Plus className="mr-1.5 h-4 w-4" /> Novo Agente
               </Button>

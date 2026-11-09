@@ -269,7 +269,7 @@ export function AgentFormSheet({ open, onOpenChange, agent }: AgentFormSheetProp
               <Button
                 type="submit"
                 disabled={form.formState.isSubmitting}
-                className="bg-brand-500 hover:bg-brand-600 text-white shadow-sm shadow-brand-500/20 h-9 px-4 text-[13px] font-medium"
+                className="bg-brand-500 hover:bg-[#1EBE5A] text-[#0A0A0A] h-9 px-4 text-[13px] font-medium"
               >
                 {form.formState.isSubmitting ? 'Salvando...' : 'Salvar Agente'}
               </Button>
