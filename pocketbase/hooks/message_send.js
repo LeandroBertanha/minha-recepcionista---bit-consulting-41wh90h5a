@@ -61,6 +61,29 @@ routerAdd(
     }
 
     let messageId = 'msg_' + $security.randomString(10)
+    const requestId = 'evo_' + $security.randomString(8)
+
+    const providerReason = (response) => {
+      const payload = response && response.json ? response.json : null
+      let value = ''
+      if (payload && typeof payload.message === 'string') value = payload.message
+      else if (payload && typeof payload.error === 'string') value = payload.error
+      else if (payload && typeof payload.status === 'string') value = payload.status
+      if (!value) return 'provider_response_omitted'
+
+      const normalized = value.toLowerCase()
+      if (normalized.includes('not connected')) return 'instance_not_connected'
+      if (normalized.includes('not found')) return 'instance_not_found'
+      if (normalized.includes('unauthorized') || normalized.includes('forbidden')) {
+        return 'provider_authorization_failed'
+      }
+      if (normalized.includes('timeout') || normalized.includes('timed out'))
+        return 'provider_timeout'
+      if (normalized.includes('rate limit') || normalized.includes('too many requests')) {
+        return 'provider_rate_limited'
+      }
+      return 'provider_error'
+    }
 
     try {
       let evoUrlSanitized = evoUrl
@@ -119,31 +142,41 @@ routerAdd(
           messageId = res.json.messageId
         }
       } else {
-        let rawBody = ''
-        try {
-          if (res.body) rawBody = new TextDecoder().decode(res.body)
-        } catch (_) {}
-
         $app
           .logger()
           .error(
-            'Evolution API Send Failed',
-            'instance',
-            instanceName,
-            'statusCode',
-            res.statusCode,
-            'response',
-            res.json ? JSON.stringify(res.json) : rawBody,
+            'Evolution send failed request=' +
+              requestId +
+              ' instanceId=' +
+              instance.id +
+              ' type=' +
+              type +
+              ' status=' +
+              res.statusCode +
+              ' reason=' +
+              providerReason(res),
           )
 
-        throw new InternalServerError('Evolution API Error')
+        throw new InternalServerError('Evolution API Error (' + requestId + ')')
       }
     } catch (err) {
       if (err instanceof InternalServerError) {
         throw err
       }
-      $app.logger().error('Evolution API Send Exception', 'error', String(err))
-      throw new InternalServerError('Evolution API Error')
+      const errorName = err && err.name ? String(err.name).slice(0, 80) : 'Error'
+      $app
+        .logger()
+        .error(
+          'Evolution send exception request=' +
+            requestId +
+            ' instanceId=' +
+            instance.id +
+            ' type=' +
+            type +
+            ' error=' +
+            errorName,
+        )
+      throw new InternalServerError('Evolution API Error (' + requestId + ')')
     }
 
     const msgsCol = $app.findCollectionByNameOrId('whatsapp_messages')

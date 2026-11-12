@@ -2,6 +2,14 @@
 
 Plataforma da Bit Consulting para centralizar atendimentos, organizar oportunidades e automatizar conversas no WhatsApp com inteligência artificial.
 
+- versão `0.0.42` publicada em produção no SKIP;
+- conexão de WhatsApp de produção validada com envio e recebimento;
+- novo domínio aguardando emissão do certificado, sem bloquear a operação no domínio atual.
+
+O acompanhamento das próximas entregas está em [`ROADMAP.md`](ROADMAP.md). O teste manual de
+uma conta adicional foi retirado do roadmap atual; a cobertura automatizada de isolamento entre
+usuários permanece obrigatória.
+
 ## 🚀 Stack Tecnológica
 
 - **React 19** - Biblioteca JavaScript para construção de interfaces
@@ -145,6 +153,13 @@ O endpoint autenticado `GET /backend/v1/integration/status` informa apenas se ca
 configurado; nenhum segredo ou endereço é retornado ao navegador. O envio e a desconexão falham de
 forma segura quando a Evolution API não está disponível, evitando exibir mensagens como enviadas
 sem confirmação do provedor.
+
+Falhas de envio recebem um identificador de correlação `evo_*` no retorno e nos logs. O log registra
+somente instância interna, tipo, status e uma categoria normalizada do erro; conteúdo da conversa,
+telefone, chave e segredo não são registrados. O cron `whatsapp_connection_health` informa a cada
+15 minutos apenas conexões que permanecem fora do estado `connected` por mais de 10 minutos.
+
+O procedimento operacional está em [`docs/OPERACAO.md`](docs/OPERACAO.md).
 
 ### Hospedagem gratuita da Evolution API
 

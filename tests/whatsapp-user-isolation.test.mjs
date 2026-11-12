@@ -56,9 +56,11 @@ function executeSend({
   organizationStatus = 'active',
   membership = true,
   role = 'admin',
+  evolutionResponse = { statusCode: 201, json: { key: { id: 'upstream-message' } } },
 } = {}) {
   const calls = []
   const saved = []
+  const logs = []
   const contact = record({
     id: 'contact-1', user_id: contactAuthor, organization_id: organization,
     instance_id: 'instance-1', remote_jid: '5511999999999@s.whatsapp.net',
@@ -92,9 +94,9 @@ function executeSend({
       },
       findCollectionByNameOrId: (name) => ({ name }),
       saveNoValidate(row) { saved.push({ ...row.values }) },
-      logger: () => ({ error() {}, warn() {} }),
+      logger: () => ({ error(message) { logs.push(message) }, warn() {} }),
     },
-    $http: { send(request) { calls.push(JSON.parse(JSON.stringify(request))); return { statusCode: 201, json: { key: { id: 'upstream-message' } } } } },
+    $http: { send(request) { calls.push(JSON.parse(JSON.stringify(request))); return evolutionResponse } },
   })
   let response
   try {
@@ -107,7 +109,7 @@ function executeSend({
   } catch (error) {
     response = { status: error.status, body: { message: error.message } }
   }
-  return { response, calls, saved, contact, instance }
+  return { response, calls, saved, logs, contact, instance }
 }
 
 test('administrador da mesma empresa não envia mensagem pela sessão de outro login', () => {
@@ -171,6 +173,25 @@ test('membro somente leitura não envia mesmo na própria sessão', () => {
   assert.equal(result.calls.length, 0)
   assert.equal(result.saved.length, 0)
 })
+
+test('falha da Evolution gera correlação útil sem registrar conteúdo, telefone ou segredo', () => {
+  const result = executeSend({
+    evolutionResponse: {
+      statusCode: 500,
+      json: { message: 'Instance not connected', apiKey: 'segredo-que-nao-deve-aparecer' },
+    },
+  })
+
+  assert.equal(result.response.status, 500)
+  assert.match(result.response.body.message, /Evolution API Error \(evo_random-id\)/)
+  assert.equal(result.saved.length, 0)
+  assert.equal(result.logs.length, 1)
+  assert.match(result.logs[0], /request=evo_random-id/)
+  assert.match(result.logs[0], /status=500/)
+  assert.match(result.logs[0], /reason=instance_not_connected/)
+  assert.doesNotMatch(result.logs[0], /Mensagem de teste|5511999999999|segredo-que-nao-deve-aparecer/)
+})
+
 
 function executeLogout({ ownInstance = true, membership = true } = {}) {
   const userId = 'richard'
@@ -321,11 +342,14 @@ test('reenvio do mesmo webhook é deduplicado somente dentro da própria sessão
   const h = webhookHarness()
   h.emit('session-leandro')
   h.emit('session-richard')
-  h.emit('session-richard')
+  const savesBeforeDuplicate = h.saves.length
+  const duplicate = h.emit('session-richard')
 
   assert.equal(h.contacts.length, 2)
   assert.equal(h.messages.length, 2)
   assert.equal(h.messages.filter((row) => row.getString('instance_id') === 'richard-instance').length, 1)
+  assert.equal(duplicate.body.duplicate, true)
+  assert.equal(h.saves.length, savesBeforeDuplicate)
 })
 
 test('evento de conexão de Richard não altera o status da instância de Leandro', () => {

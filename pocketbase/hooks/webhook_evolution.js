@@ -66,6 +66,18 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
       if (!messageId) return e.json(200, { ok: true })
       const pushName = body.data?.pushName || remoteJid.split('@')[0]
 
+      // A Evolution pode reenviar o mesmo evento durante reconexões. A
+      // deduplicação precisa ocorrer antes de baixar mídia ou alterar o
+      // contato, garantindo idempotência completa da repetição.
+      try {
+        $app.findFirstRecordByFilter(
+          'whatsapp_messages',
+          'organization_id = {:organizationId} && instance_id = {:instanceId} && message_id = {:messageId}',
+          { organizationId, instanceId: instance.id, messageId },
+        )
+        return e.json(200, { ok: true, duplicate: true })
+      } catch (_) {}
+
       let type = 'text'
       let mimeType = ''
       let fileName = ''
@@ -184,59 +196,51 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
       contact.set('last_message_at', new Date().toISOString())
       $app.saveNoValidate(contact)
 
-      try {
-        $app.findFirstRecordByFilter(
-          'whatsapp_messages',
-          'organization_id = {:organizationId} && instance_id = {:instanceId} && message_id = {:messageId}',
-          { organizationId, instanceId: instance.id, messageId },
-        )
-      } catch (_) {
-        const msgsCol = $app.findCollectionByNameOrId('whatsapp_messages')
-        const msgRecord = new Record(msgsCol)
-        msgRecord.set('user_id', userId)
-        msgRecord.set('organization_id', organizationId)
-        msgRecord.set('instance_id', instance.id)
-        msgRecord.set('contact_id', contact.id)
-        msgRecord.set('remote_jid', remoteJid)
-        msgRecord.set('message_id', messageId)
-        msgRecord.set('direction', fromMe ? 'out' : 'in')
-        msgRecord.set('body', text)
-        msgRecord.set('type', type)
-        msgRecord.set('mime_type', mimeType)
-        msgRecord.set('file_name', fileName)
-        msgRecord.set('caption', text)
-        msgRecord.set('sent_at', new Date().toISOString())
+      const msgsCol = $app.findCollectionByNameOrId('whatsapp_messages')
+      const msgRecord = new Record(msgsCol)
+      msgRecord.set('user_id', userId)
+      msgRecord.set('organization_id', organizationId)
+      msgRecord.set('instance_id', instance.id)
+      msgRecord.set('contact_id', contact.id)
+      msgRecord.set('remote_jid', remoteJid)
+      msgRecord.set('message_id', messageId)
+      msgRecord.set('direction', fromMe ? 'out' : 'in')
+      msgRecord.set('body', text)
+      msgRecord.set('type', type)
+      msgRecord.set('mime_type', mimeType)
+      msgRecord.set('file_name', fileName)
+      msgRecord.set('caption', text)
+      msgRecord.set('sent_at', new Date().toISOString())
 
-        if (mediaBase64) {
-          try {
-            const b64 = mediaBase64.replace(/[^A-Za-z0-9+/=]/g, '')
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-            const lookup = new Uint8Array(256)
-            for (let i = 0; i < chars.length; i++) lookup[chars.charCodeAt(i)] = i
+      if (mediaBase64) {
+        try {
+          const b64 = mediaBase64.replace(/[^A-Za-z0-9+/=]/g, '')
+          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+          const lookup = new Uint8Array(256)
+          for (let i = 0; i < chars.length; i++) lookup[chars.charCodeAt(i)] = i
 
-            let bufferLength = b64.length * 0.75
-            if (b64[b64.length - 1] === '=') bufferLength--
-            if (b64[b64.length - 2] === '=') bufferLength--
+          let bufferLength = b64.length * 0.75
+          if (b64[b64.length - 1] === '=') bufferLength--
+          if (b64[b64.length - 2] === '=') bufferLength--
 
-            const bytes = new Uint8Array(bufferLength)
-            let p = 0
-            for (let i = 0; i < b64.length; i += 4) {
-              let encoded1 = lookup[b64.charCodeAt(i)]
-              let encoded2 = lookup[b64.charCodeAt(i + 1)]
-              let encoded3 = lookup[b64.charCodeAt(i + 2)]
-              let encoded4 = lookup[b64.charCodeAt(i + 3)]
-              bytes[p++] = (encoded1 << 2) | (encoded2 >> 4)
-              if (p < bufferLength) bytes[p++] = ((encoded2 & 15) << 4) | (encoded3 >> 2)
-              if (p < bufferLength) bytes[p++] = ((encoded3 & 3) << 6) | (encoded4 & 63)
-            }
-            msgRecord.set('media_file', $filesystem.fileFromBytes(bytes, fileName || 'media'))
-          } catch (e) {
-            $app.logger().warn('Failed to parse media base64', 'error', String(e))
+          const bytes = new Uint8Array(bufferLength)
+          let p = 0
+          for (let i = 0; i < b64.length; i += 4) {
+            let encoded1 = lookup[b64.charCodeAt(i)]
+            let encoded2 = lookup[b64.charCodeAt(i + 1)]
+            let encoded3 = lookup[b64.charCodeAt(i + 2)]
+            let encoded4 = lookup[b64.charCodeAt(i + 3)]
+            bytes[p++] = (encoded1 << 2) | (encoded2 >> 4)
+            if (p < bufferLength) bytes[p++] = ((encoded2 & 15) << 4) | (encoded3 >> 2)
+            if (p < bufferLength) bytes[p++] = ((encoded3 & 3) << 6) | (encoded4 & 63)
           }
+          msgRecord.set('media_file', $filesystem.fileFromBytes(bytes, fileName || 'media'))
+        } catch (e) {
+          $app.logger().warn('Failed to parse media base64', 'error', String(e))
         }
-
-        $app.saveNoValidate(msgRecord)
       }
+
+      $app.saveNoValidate(msgRecord)
     }
   } catch (err) {
     $app.logger().error('Webhook Error', 'error', String(err))
