@@ -17,6 +17,7 @@ export function useRealtime<TRecord extends RecordModel = RecordModel>(
   collectionName: string,
   callback: (data: RecordSubscription<TRecord>) => void,
   enabled: boolean = true,
+  scopeKey: string = '',
 ) {
   const callbackRef = useRef(callback)
   callbackRef.current = callback
@@ -46,7 +47,7 @@ export function useRealtime<TRecord extends RecordModel = RecordModel>(
         unsubscribeFn().catch(() => {})
       }
     }
-  }, [collectionName, enabled])
+  }, [collectionName, enabled, scopeKey])
 }
 
 export default useRealtime
