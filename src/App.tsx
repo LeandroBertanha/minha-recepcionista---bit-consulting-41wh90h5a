@@ -8,7 +8,7 @@ import { AgentFormSheet } from './components/agents/AgentFormSheet'
 import { Toaster } from './components/ui/toaster'
 import { ProductLogo } from './components/ProductLogo'
 import { HeroReveal } from './landing/components/HeroReveal'
-import { deleteAiAgent, getAiAgents, updateAiAgent, type AiAgent } from './services/ai_agents'
+import { getAiAgents, updateAiAgent, type AiAgent } from './services/ai_agents'
 import {
   AgentCard,
   AgentCardSkeleton,
@@ -780,7 +780,6 @@ function AgentsView() {
   const [formOpen, setFormOpen] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState<AiAgent | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<AiAgent | null>(null)
 
   const loadData = useCallback(async () => {
@@ -920,7 +919,7 @@ function AgentsView() {
 
       <DeleteAgentDialog
         agent={deleteTarget}
-        loading={deleting}
+        onDeleted={loadData}
         onClose={() => setDeleteTarget(null)}
       />
     </div>
