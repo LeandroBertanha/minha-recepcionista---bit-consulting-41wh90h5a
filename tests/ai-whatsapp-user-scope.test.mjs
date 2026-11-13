@@ -55,6 +55,8 @@ async function execute({
   let handler
   vm.runInNewContext(source, {
     onRecordAfterCreateSuccess(fn) { handler = fn },
+    routerAdd() {},
+    $apis: { requireAuth: () => 'auth-middleware' },
     Record: class { constructor() { return record({ id: 'new-ai-message' }) } },
     $security: { randomString: () => 'fixture-id' },
     $secrets: {

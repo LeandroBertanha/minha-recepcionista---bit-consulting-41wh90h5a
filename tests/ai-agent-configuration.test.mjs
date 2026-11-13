@@ -67,6 +67,27 @@ test('system prompt aceita e informa o limite de 7.000 caracteres', async () => 
   assert.match(form, /field\.value\.length\.toLocaleString\('pt-BR'\)/)
 })
 
+test('simulador usa endpoint autenticado sem enviar WhatsApp nem gravar conversa', async () => {
+  const [app, service, hook] = await Promise.all([
+    readProjectFile('src/App.tsx'),
+    readProjectFile('src/services/ai_agents.ts'),
+    readProjectFile('pocketbase/hooks/on_message_create_ai.js'),
+  ])
+  const simulatorRoute = hook.slice(hook.indexOf("'/backend/v1/ai/simulate'"))
+
+  assert.match(app, /simulateAiAgent\(simulatorAgent\.id, message\)/)
+  assert.match(app, /Abrir simulador/)
+  assert.match(app, /Resposta da recepcionista/)
+  assert.doesNotMatch(app, /Simulador na próxima etapa/)
+  assert.match(service, /pb\.send<AiSimulationResult>\('\/backend\/v1\/ai\/simulate'/)
+  assert.match(simulatorRoute, /\$apis\.requireAuth\(\)/)
+  assert.match(simulatorRoute, /agent\.getString\('user_id'\) !== e\.auth\.id/)
+  assert.match(simulatorRoute, /instance\.getString\('user_id'\) !== e\.auth\.id/)
+  assert.match(simulatorRoute, /\$secrets\.get\('OPENAI_API_KEY'\)/)
+  assert.match(simulatorRoute, /store: false/)
+  assert.doesNotMatch(simulatorRoute, /saveNoValidate|message\/sendText/)
+})
+
 test('migração oculta a chave da API sem alterar registros', async () => {
   const migration = await readProjectFile('pocketbase/migrations/0017_protect_ai_agent_credentials.js')
   const states = []

@@ -8,7 +8,7 @@ import { AgentFormSheet } from './components/agents/AgentFormSheet'
 import { Toaster } from './components/ui/toaster'
 import { ProductLogo } from './components/ProductLogo'
 import { HeroReveal } from './landing/components/HeroReveal'
-import { getAiAgents, updateAiAgent, type AiAgent } from './services/ai_agents'
+import { getAiAgents, simulateAiAgent, updateAiAgent, type AiAgent } from './services/ai_agents'
 import {
   AgentCard,
   AgentCardSkeleton,
@@ -16,6 +16,15 @@ import {
   NewReceptionistButton,
 } from './components/agents/AgentsBoard'
 import { DeleteAgentDialog } from './components/agents/DeleteAgentDialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './components/ui/dialog'
+import { Textarea } from './components/ui/textarea'
 import {
   getInstances,
   getIntegrationStatus,
@@ -781,6 +790,10 @@ function AgentsView() {
   const [selectedAgent, setSelectedAgent] = useState<AiAgent | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<AiAgent | null>(null)
+  const [simulatorOpen, setSimulatorOpen] = useState(false)
+  const [simulationMessage, setSimulationMessage] = useState('')
+  const [simulationReply, setSimulationReply] = useState('')
+  const [simulating, setSimulating] = useState(false)
 
   const loadData = useCallback(async () => {
     if (!user) return
@@ -808,6 +821,7 @@ function AgentsView() {
 
   const connectedInstance = instances.find((instance) => instance.status === 'connected')
   const canCreate = !!connectedInstance && agents.length === 0
+  const simulatorAgent = agents[0]
 
   const openAgent = (agent: AiAgent | null) => {
     setSelectedAgent(agent)
@@ -836,6 +850,35 @@ function AgentsView() {
   const requestDeleteAgent = (agent: AiAgent) => {
     setSelectedAgent((current) => (current?.id === agent.id ? null : current))
     setDeleteTarget(agent)
+  }
+
+  const openSimulator = () => {
+    if (!simulatorAgent) return
+    setSimulationReply('')
+    setSimulatorOpen(true)
+  }
+
+  const runSimulation = async () => {
+    const message = simulationMessage.trim()
+    if (!simulatorAgent || !message) {
+      toast.error('Digite uma mensagem para testar a recepcionista.')
+      return
+    }
+
+    setSimulating(true)
+    setSimulationReply('')
+    try {
+      const result = await simulateAiAgent(simulatorAgent.id, message)
+      setSimulationReply(result.reply)
+    } catch (error) {
+      const responseMessage =
+        error && typeof error === 'object' && 'response' in error
+          ? (error as { response?: { message?: string } }).response?.message
+          : undefined
+      toast.error(responseMessage || 'Não foi possível concluir o teste da IA.')
+    } finally {
+      setSimulating(false)
+    }
   }
 
   return (
@@ -903,12 +946,72 @@ function AgentsView() {
           </div>
         </div>
         <button
-          disabled
-          className="mt-4 shrink-0 cursor-not-allowed rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white/55 lg:mt-0"
+          type="button"
+          disabled={!simulatorAgent}
+          onClick={openSimulator}
+          title={simulatorAgent ? undefined : 'Crie uma recepcionista antes de abrir o simulador.'}
+          className="mt-4 shrink-0 rounded-full bg-[#25D366] px-5 py-2.5 text-sm font-bold text-[#0A0A0A] transition hover:bg-[#20bd5b] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/55 lg:mt-0"
         >
-          Simulador na próxima etapa
+          {simulatorAgent ? 'Abrir simulador' : 'Crie uma recepcionista primeiro'}
         </button>
       </section>
+
+      <Dialog open={simulatorOpen} onOpenChange={setSimulatorOpen}>
+        <DialogContent className="border-neutral-200 bg-white text-neutral-900 dark:border-white/10 dark:bg-[#141414] dark:text-white sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Simular atendimento</DialogTitle>
+            <DialogDescription>
+              Teste a recepcionista {simulatorAgent?.name || ''} sem enviar mensagens ao WhatsApp.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="simulation-message" className="text-sm font-medium">
+                Mensagem do cliente
+              </label>
+              <Textarea
+                id="simulation-message"
+                value={simulationMessage}
+                onChange={(event) => setSimulationMessage(event.target.value)}
+                maxLength={4000}
+                placeholder="Ex.: Gostaria de saber o preço e como funciona o serviço."
+                className="min-h-32"
+              />
+              <p className="text-right text-xs text-neutral-500 dark:text-neutral-400">
+                {simulationMessage.length.toLocaleString('pt-BR')} / 4.000 caracteres
+              </p>
+            </div>
+
+            {simulationReply ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-400/20 dark:bg-emerald-400/10">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700 dark:text-emerald-300">
+                  Resposta da recepcionista
+                </p>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{simulationReply}</p>
+              </div>
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setSimulatorOpen(false)}
+              className="rounded-full border border-neutral-200 px-4 py-2 text-sm font-semibold dark:border-white/10"
+            >
+              Fechar
+            </button>
+            <button
+              type="button"
+              onClick={() => void runSimulation()}
+              disabled={simulating || !simulationMessage.trim()}
+              className="rounded-full bg-[#25D366] px-5 py-2 text-sm font-bold text-[#0A0A0A] transition hover:bg-[#20bd5b] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {simulating ? 'Testando...' : 'Testar recepcionista'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AgentFormSheet
         open={formOpen}

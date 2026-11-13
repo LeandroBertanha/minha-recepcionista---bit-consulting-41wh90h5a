@@ -21,6 +21,11 @@ export type AiAgent = {
   }
 }
 
+export type AiSimulationResult = {
+  reply: string
+  provider: 'openai' | 'gemini'
+}
+
 export const getAiAgents = () =>
   pb.collection<AiAgent>('ai_agents').getFullList({ expand: 'instance_id', sort: '-created' })
 
@@ -34,3 +39,12 @@ export const updateAiAgent = (id: string, data: Record<string, unknown>) =>
   pb.collection<AiAgent>('ai_agents').update(id, data)
 
 export const deleteAiAgent = (id: string) => pb.collection('ai_agents').delete(id)
+
+export const simulateAiAgent = (agentId: string, message: string) => {
+  if (!pb.authStore.record?.id) throw new Error('Entre na sua conta para testar a recepcionista.')
+
+  return pb.send<AiSimulationResult>('/backend/v1/ai/simulate', {
+    method: 'POST',
+    body: { agent_id: agentId, message },
+  })
+}
