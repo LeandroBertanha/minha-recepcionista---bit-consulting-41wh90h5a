@@ -793,6 +793,7 @@ function AgentsView() {
   const [simulatorOpen, setSimulatorOpen] = useState(false)
   const [simulationMessage, setSimulationMessage] = useState('')
   const [simulationReply, setSimulationReply] = useState('')
+  const [simulationError, setSimulationError] = useState('')
   const [simulating, setSimulating] = useState(false)
 
   const loadData = useCallback(async () => {
@@ -855,6 +856,7 @@ function AgentsView() {
   const openSimulator = () => {
     if (!simulatorAgent) return
     setSimulationReply('')
+    setSimulationError('')
     setSimulatorOpen(true)
   }
 
@@ -867,6 +869,7 @@ function AgentsView() {
 
     setSimulating(true)
     setSimulationReply('')
+    setSimulationError('')
     try {
       const result = await simulateAiAgent(simulatorAgent.id, message)
       setSimulationReply(result.reply)
@@ -875,7 +878,7 @@ function AgentsView() {
         error && typeof error === 'object' && 'response' in error
           ? (error as { response?: { message?: string } }).response?.message
           : undefined
-      toast.error(responseMessage || 'Não foi possível concluir o teste da IA.')
+      setSimulationError(responseMessage || 'Não foi possível concluir o teste da IA.')
     } finally {
       setSimulating(false)
     }
@@ -973,7 +976,10 @@ function AgentsView() {
               <Textarea
                 id="simulation-message"
                 value={simulationMessage}
-                onChange={(event) => setSimulationMessage(event.target.value)}
+                onChange={(event) => {
+                  setSimulationMessage(event.target.value)
+                  setSimulationError('')
+                }}
                 maxLength={4000}
                 placeholder="Ex.: Gostaria de saber o preço e como funciona o serviço."
                 className="min-h-32"
@@ -984,11 +990,23 @@ function AgentsView() {
             </div>
 
             {simulationReply ? (
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-400/20 dark:bg-emerald-400/10">
+              <div
+                aria-live="polite"
+                className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-400/20 dark:bg-emerald-400/10"
+              >
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700 dark:text-emerald-300">
                   Resposta da recepcionista
                 </p>
                 <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{simulationReply}</p>
+              </div>
+            ) : null}
+
+            {simulationError ? (
+              <div
+                role="alert"
+                className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-700 dark:border-red-400/20 dark:bg-red-400/10 dark:text-red-300"
+              >
+                {simulationError}
               </div>
             ) : null}
           </div>

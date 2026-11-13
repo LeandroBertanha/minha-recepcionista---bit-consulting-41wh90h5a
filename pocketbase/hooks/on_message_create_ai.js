@@ -413,6 +413,40 @@ routerAdd(
       })
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
+        const providerError = response.json?.error || {}
+        const providerErrorCode = String(providerError.code || providerError.type || '')
+        const providerStatus = response.statusCode
+        let publicCode = 'provider_rejected'
+        let publicMessage = 'O provedor de IA recusou o teste. Tente novamente em instantes.'
+
+        if (providerStatus === 401) {
+          publicCode = 'provider_invalid_key'
+          publicMessage =
+            'A chave do provedor de IA é inválida ou foi revogada. Atualize a credencial no servidor.'
+        } else if (providerStatus === 403) {
+          publicCode = 'provider_access_denied'
+          publicMessage =
+            'O projeto da IA não tem acesso ao modelo configurado. Revise as permissões e o modelo no provedor.'
+        } else if (providerStatus === 429) {
+          if (/quota|billing|spend|usage|credit/i.test(providerErrorCode)) {
+            publicCode = 'provider_quota_exceeded'
+            publicMessage =
+              'A conta do provedor de IA está sem saldo ou atingiu o limite de uso. Revise o faturamento e os limites do projeto.'
+          } else {
+            publicCode = 'provider_rate_limited'
+            publicMessage =
+              'O provedor de IA recebeu muitas solicitações. Aguarde alguns segundos e tente novamente.'
+          }
+        } else if (providerStatus === 400 || providerStatus === 404) {
+          publicCode = 'provider_configuration_error'
+          publicMessage =
+            'O modelo de IA configurado não pôde ser usado. Revise o modelo definido no servidor.'
+        } else if (providerStatus >= 500) {
+          publicCode = 'provider_unavailable'
+          publicMessage =
+            'O provedor de IA está temporariamente indisponível. Tente novamente em instantes.'
+        }
+
         $app
           .logger()
           .error(
@@ -422,9 +456,11 @@ routerAdd(
             'provider',
             provider,
             'status',
-            response.statusCode,
+            providerStatus,
+            'public_code',
+            publicCode,
           )
-        return e.json(502, { message: 'O provedor de IA não respondeu ao teste.' })
+        return e.json(502, { message: publicMessage, code: publicCode })
       }
 
       let reply = ''
@@ -440,7 +476,12 @@ routerAdd(
       }
 
       reply = reply.trim()
-      if (!reply) return e.json(502, { message: 'A IA não retornou uma resposta utilizável.' })
+      if (!reply) {
+        return e.json(502, {
+          message: 'A IA não retornou uma resposta utilizável. Tente novamente.',
+          code: 'provider_empty_response',
+        })
+      }
 
       return e.json(200, { reply, provider })
     } catch (err) {
@@ -448,7 +489,10 @@ routerAdd(
       $app
         .logger()
         .error('AI simulator request failed', 'request_id', requestId, 'error_type', errorType)
-      return e.json(502, { message: 'Não foi possível concluir o teste da IA.' })
+      return e.json(502, {
+        message: 'Não foi possível conectar ao provedor de IA. Tente novamente em instantes.',
+        code: 'provider_request_failed',
+      })
     }
   },
   $apis.requireAuth(),
