@@ -58,6 +58,15 @@ test('formulário nunca solicita nem envia chave de provedor pelo navegador', as
   assert.match(form, /active: false/)
 })
 
+test('system prompt aceita e informa o limite de 7.000 caracteres', async () => {
+  const form = await readProjectFile('src/components/agents/AgentFormSheet.tsx')
+
+  assert.match(form, /SYSTEM_PROMPT_MAX_LENGTH = 7_000/)
+  assert.match(form, /\.max\(\s*SYSTEM_PROMPT_MAX_LENGTH/)
+  assert.match(form, /maxLength=\{SYSTEM_PROMPT_MAX_LENGTH\}/)
+  assert.match(form, /field\.value\.length\.toLocaleString\('pt-BR'\)/)
+})
+
 test('migração oculta a chave da API sem alterar registros', async () => {
   const migration = await readProjectFile('pocketbase/migrations/0017_protect_ai_agent_credentials.js')
   const states = []

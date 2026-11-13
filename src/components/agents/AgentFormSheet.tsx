@@ -34,11 +34,19 @@ import {
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 
+const SYSTEM_PROMPT_MAX_LENGTH = 7_000
+
 const formSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório'),
   description: z.string().optional(),
   provider: z.enum(['gemini', 'openai'], { error: 'Provedor é obrigatório' }),
-  system_prompt: z.string().min(1, 'Prompt do sistema é obrigatório'),
+  system_prompt: z
+    .string()
+    .min(1, 'Prompt do sistema é obrigatório')
+    .max(
+      SYSTEM_PROMPT_MAX_LENGTH,
+      `O prompt do sistema deve ter no máximo ${SYSTEM_PROMPT_MAX_LENGTH.toLocaleString('pt-BR')} caracteres`,
+    ),
   active: z.boolean(),
 })
 
@@ -232,9 +240,14 @@ export function AgentFormSheet({ open, onOpenChange, agent, onSaved }: AgentForm
                     <Textarea
                       placeholder="Você é um assistente virtual de vendas..."
                       className="min-h-[150px]"
+                      maxLength={SYSTEM_PROMPT_MAX_LENGTH}
                       {...field}
                     />
                   </FormControl>
+                  <p className="text-right text-[11.5px] text-zinc-500 dark:text-neutral-400">
+                    {field.value.length.toLocaleString('pt-BR')} /{' '}
+                    {SYSTEM_PROMPT_MAX_LENGTH.toLocaleString('pt-BR')} caracteres
+                  </p>
                   <FormMessage />
                 </FormItem>
               )}
