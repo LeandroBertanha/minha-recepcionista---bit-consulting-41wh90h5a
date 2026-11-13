@@ -51,12 +51,16 @@ const requireUserId = () => {
 
 export const getInstances = (organizationId?: string) => {
   const userId = requireUserId()
+  const filter = organizationId
+    ? pb.filter('user_id = {:userId} && organization_id = {:organizationId}', {
+        userId,
+        organizationId,
+      })
+    : pb.filter('user_id = {:userId}', { userId })
+
   return pb.collection<WhatsAppInstance>('whatsapp_instances').getFullList({
     sort: '-created',
-    filter: pb.filter(
-      'user_id = {:userId}' + (organizationId ? ' && organization_id = {:organizationId}' : ''),
-      { userId, organizationId },
-    ),
+    filter,
   })
 }
 

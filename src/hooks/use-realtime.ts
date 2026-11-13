@@ -11,19 +11,20 @@ const REALTIME_CLEANUP_GRACE_MS = 250
  * Uses the per-listener UnsubscribeFunc so multiple components
  * can safely subscribe to the same collection without conflicts.
  *
+ * `scopeKey` (4th argument) re-scopes the subscription per user/session:
+ * when it changes the previous subscription is released (with a short
+ * grace window so an obsolete clientId is never reused) and a new one
+ * is opened for the current scope.
+ *
  * Generic over the record type: pass your collection's interface as
  * `useRealtime<MyRecord>(...)` to get a typed subscription payload
  * instead of `unknown`.
- *
- * `scopeKey` (4th arg) narrows realtime events to the authenticated
- * user's records: updates for records outside the scope are ignored,
- * so one login never reacts to another user's WhatsApp instance.
  */
 export function useRealtime<TRecord extends RecordModel = RecordModel>(
   collectionName: string,
   callback: (data: RecordSubscription<TRecord>) => void,
   enabled: boolean = true,
-  scopeKey: string = '',
+  scopeKey?: string,
 ) {
   const callbackRef = useRef(callback)
   callbackRef.current = callback
@@ -34,32 +35,20 @@ export function useRealtime<TRecord extends RecordModel = RecordModel>(
     let unsubscribeFn: (() => Promise<void>) | undefined
     let cancelled = false
 
-    const releaseSubscription = () => {
-      if (!unsubscribeFn) return
-      unsubscribeFn().catch(() => {})
-      unsubscribeFn = undefined
+    const releaseSubscription = (fn: (() => Promise<void>) | undefined) => {
+      if (!fn) return
+      window.setTimeout(() => {
+        fn().catch(() => {})
+      }, REALTIME_CLEANUP_GRACE_MS)
     }
 
     pb.collection<TRecord>(collectionName)
       .subscribe('*', (e) => {
-        if (!scopeKey) {
-          callbackRef.current(e)
-          return
-        }
-        const record = e.record as
-          | { id?: string; user_id?: string; organization_id?: string }
-          | undefined
-        const inScope =
-          record?.user_id === scopeKey ||
-          record?.organization_id === scopeKey ||
-          record?.id === scopeKey
-        if (inScope) {
-          callbackRef.current(e)
-        }
+        callbackRef.current(e)
       })
       .then((fn) => {
         if (cancelled) {
-          fn().catch(() => {})
+          releaseSubscription(fn)
         } else {
           unsubscribeFn = fn
         }
@@ -68,7 +57,8 @@ export function useRealtime<TRecord extends RecordModel = RecordModel>(
 
     return () => {
       cancelled = true
-      window.setTimeout(releaseSubscription, REALTIME_CLEANUP_GRACE_MS)
+      releaseSubscription(unsubscribeFn)
+      unsubscribeFn = undefined
     }
   }, [collectionName, enabled, scopeKey])
 }

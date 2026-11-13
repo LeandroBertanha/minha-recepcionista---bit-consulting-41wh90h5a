@@ -24,6 +24,14 @@ test('estado remoto conectado libera a recepcionista sem alterar a instância no
   assert.doesNotMatch(service, /collection<WhatsAppInstance>\('whatsapp_instances'\)\.update/)
 })
 
+test('consulta de instâncias não envia parâmetro de organização indefinido', async () => {
+  const service = await readProjectFile('src/services/whatsapp.ts')
+
+  assert.match(service, /organizationId\s*\?\s*pb\.filter/)
+  assert.match(service, /pb\.filter\('user_id = \{:userId\}', \{ userId \}\)/)
+  assert.doesNotMatch(service, /\{ userId, organizationId \},\s*\)\s*,/)
+})
+
 test('edição nunca reutiliza nem envia a chave já armazenada', async () => {
   const form = await readProjectFile('src/components/agents/AgentFormSheet.tsx')
 
