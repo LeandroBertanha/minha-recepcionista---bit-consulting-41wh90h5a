@@ -3,6 +3,8 @@ import type { RecordModel, RecordSubscription } from 'pocketbase'
 
 import pb from '@/lib/pocketbase/client'
 
+const REALTIME_CLEANUP_GRACE_MS = 250
+
 /**
  * Hook for real-time subscriptions to a PocketBase collection.
  * ALWAYS use this hook instead of subscribing inline.
@@ -21,7 +23,7 @@ export function useRealtime<TRecord extends RecordModel = RecordModel>(
   collectionName: string,
   callback: (data: RecordSubscription<TRecord>) => void,
   enabled: boolean = true,
-  scopeKey?: string,
+  scopeKey: string = '',
 ) {
   const callbackRef = useRef(callback)
   callbackRef.current = callback
@@ -31,6 +33,12 @@ export function useRealtime<TRecord extends RecordModel = RecordModel>(
 
     let unsubscribeFn: (() => Promise<void>) | undefined
     let cancelled = false
+
+    const releaseSubscription = () => {
+      if (!unsubscribeFn) return
+      unsubscribeFn().catch(() => {})
+      unsubscribeFn = undefined
+    }
 
     pb.collection<TRecord>(collectionName)
       .subscribe('*', (e) => {
@@ -60,9 +68,7 @@ export function useRealtime<TRecord extends RecordModel = RecordModel>(
 
     return () => {
       cancelled = true
-      if (unsubscribeFn) {
-        unsubscribeFn().catch(() => {})
-      }
+      window.setTimeout(releaseSubscription, REALTIME_CLEANUP_GRACE_MS)
     }
   }, [collectionName, enabled, scopeKey])
 }
