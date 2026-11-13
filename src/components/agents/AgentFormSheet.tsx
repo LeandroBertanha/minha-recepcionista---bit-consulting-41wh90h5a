@@ -3,10 +3,10 @@ import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { toast } from 'sonner'
-import pb from '@/lib/pocketbase/client'
 import { extractFieldErrors } from '@/lib/pocketbase/errors'
 import { useAuth } from '@/hooks/use-auth'
-import { createAiAgent, updateAiAgent } from '@/services/ai_agents'
+import { createAiAgent, updateAiAgent, type AiAgent } from '@/services/ai_agents'
+import { getInstances, type WhatsAppInstance } from '@/services/whatsapp'
 import {
   Sheet,
   SheetContent,
@@ -38,7 +38,7 @@ const formSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório'),
   description: z.string().optional(),
   provider: z.enum(['gemini', 'openai'], { error: 'Provedor é obrigatório' }),
-  api_key: z.string().min(1, 'Chave da API é obrigatória'),
+  api_key: z.string().optional(),
   system_prompt: z.string().min(1, 'Prompt do sistema é obrigatório'),
   active: z.boolean(),
 })
@@ -48,12 +48,13 @@ type AgentFormValues = z.infer<typeof formSchema>
 interface AgentFormSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  agent?: any
+  agent?: AiAgent | null
+  onSaved?: () => void | Promise<void>
 }
 
-export function AgentFormSheet({ open, onOpenChange, agent }: AgentFormSheetProps) {
+export function AgentFormSheet({ open, onOpenChange, agent, onSaved }: AgentFormSheetProps) {
   const { user } = useAuth()
-  const [instances, setInstances] = useState<any[]>([])
+  const [instances, setInstances] = useState<WhatsAppInstance[]>([])
 
   const form = useForm<AgentFormValues>({
     resolver: zodResolver(formSchema),
@@ -63,14 +64,14 @@ export function AgentFormSheet({ open, onOpenChange, agent }: AgentFormSheetProp
       provider: 'openai',
       api_key: '',
       system_prompt: '',
-      active: true,
+      active: false,
     },
   })
 
   useEffect(() => {
     const loadInstances = async () => {
       try {
-        const data = await pb.collection('whatsapp_instances').getFullList()
+        const data = await getInstances()
         setInstances(data)
       } catch (e) {
         console.error(e)
@@ -85,7 +86,7 @@ export function AgentFormSheet({ open, onOpenChange, agent }: AgentFormSheetProp
         name: agent.name,
         description: agent.description || '',
         provider: agent.provider || 'openai',
-        api_key: agent.api_key || '',
+        api_key: '',
         system_prompt: agent.system_prompt,
         active: agent.active,
       })
@@ -96,15 +97,23 @@ export function AgentFormSheet({ open, onOpenChange, agent }: AgentFormSheetProp
         provider: 'openai',
         api_key: '',
         system_prompt: '',
-        active: true,
+        active: false,
       })
     }
   }, [agent, form, open])
 
   const onSubmit = async (values: AgentFormValues) => {
     if (!user) return
+    const apiKey = values.api_key?.trim() || ''
+    if (!agent && !apiKey) {
+      form.setError('api_key', { message: 'Chave da API é obrigatória' })
+      return
+    }
+
     try {
-      const instanceId = agent?.instance_id || (instances.length > 0 ? instances[0].id : null)
+      const preferredInstance =
+        instances.find((item) => item.status === 'connected') || instances[0]
+      const instanceId = agent?.instance_id || preferredInstance?.id || null
 
       if (!instanceId) {
         toast.error('Nenhuma instância conectada. Conecte o WhatsApp primeiro.')
@@ -119,12 +128,17 @@ export function AgentFormSheet({ open, onOpenChange, agent }: AgentFormSheetProp
         return
       }
 
-      const data = {
-        ...values,
+      const data: Record<string, unknown> = {
+        name: values.name,
+        description: values.description || '',
+        provider: values.provider,
+        system_prompt: values.system_prompt,
+        active: values.active,
         user_id: user.id,
         organization_id: organizationId,
         instance_id: instanceId,
       }
+      if (apiKey) data.api_key = apiKey
 
       if (agent) {
         await updateAiAgent(agent.id, data)
@@ -133,13 +147,16 @@ export function AgentFormSheet({ open, onOpenChange, agent }: AgentFormSheetProp
         await createAiAgent(data)
         toast.success('Agente criado com sucesso!')
       }
+      await onSaved?.()
       onOpenChange(false)
     } catch (error) {
       const errors = extractFieldErrors(error)
       if (Object.keys(errors).length > 0) {
-        Object.entries(errors).forEach(([field, msg]) =>
-          form.setError(field as any, { message: msg }),
-        )
+        Object.entries(errors).forEach(([field, msg]) => {
+          if (field in formSchema.shape) {
+            form.setError(field as keyof AgentFormValues, { message: msg })
+          }
+        })
       } else {
         toast.error('Ocorreu um erro ao salvar o agente.')
       }
@@ -148,12 +165,12 @@ export function AgentFormSheet({ open, onOpenChange, agent }: AgentFormSheetProp
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-md overflow-y-auto bg-white">
+      <SheetContent className="overflow-y-auto bg-white text-neutral-900 dark:bg-[#141414] dark:text-white sm:max-w-md">
         <SheetHeader className="space-y-1 pb-2">
-          <SheetTitle className="text-[18px] font-semibold tracking-tight text-zinc-900">
+          <SheetTitle className="text-[18px] font-semibold tracking-tight text-zinc-900 dark:text-white">
             {agent ? 'Editar Agente' : 'Novo Agente'}
           </SheetTitle>
-          <SheetDescription className="text-[13.5px] text-zinc-500">
+          <SheetDescription className="text-[13.5px] text-zinc-500 dark:text-neutral-400">
             Configure as instruções de IA para automação de conversas.
           </SheetDescription>
         </SheetHeader>
@@ -216,10 +233,20 @@ export function AgentFormSheet({ open, onOpenChange, agent }: AgentFormSheetProp
                 name="api_key"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Chave da API</FormLabel>
+                    <FormLabel>{agent ? 'Nova chave da API (opcional)' : 'Chave da API'}</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="sk-..." {...field} />
+                      <Input
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder={agent ? 'Deixe vazio para manter a chave atual' : 'sk-...'}
+                        {...field}
+                      />
                     </FormControl>
+                    {agent && (
+                      <p className="text-[11.5px] text-zinc-500 dark:text-neutral-400">
+                        A chave salva nunca é exibida pelo sistema.
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
@@ -246,13 +273,13 @@ export function AgentFormSheet({ open, onOpenChange, agent }: AgentFormSheetProp
               control={form.control}
               name="active"
               render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-xl bg-zinc-50/60 ring-1 ring-zinc-200/70 p-4 mt-2">
+                <FormItem className="mt-2 flex flex-row items-center justify-between rounded-xl bg-zinc-50/60 p-4 ring-1 ring-zinc-200/70 dark:bg-white/[0.04] dark:ring-white/10">
                   <div className="space-y-0.5">
-                    <FormLabel className="text-[14px] font-medium text-zinc-900">
+                    <FormLabel className="text-[14px] font-medium text-zinc-900 dark:text-white">
                       Agente Ativo
                     </FormLabel>
-                    <p className="text-[12.5px] text-zinc-500">
-                      Quando ligado, o agente responde automaticamente.
+                    <p className="text-[12.5px] text-zinc-500 dark:text-neutral-400">
+                      Ative somente depois de validar as instruções e a chave.
                     </p>
                   </div>
                   <FormControl>

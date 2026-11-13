@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AuthProvider, useAuth } from './hooks/use-auth'
+import { useRealtime } from './hooks/use-realtime'
 import pb from './lib/pocketbase/client'
 import ConnectionSetup from './pages/ConnectionSetup'
 import Inbox from './pages/Inbox'
+import { AgentFormSheet } from './components/agents/AgentFormSheet'
 import { Toaster } from './components/ui/toaster'
 import { ProductLogo } from './components/ProductLogo'
 import { HeroReveal } from './landing/components/HeroReveal'
+import { getAiAgents, updateAiAgent, type AiAgent } from './services/ai_agents'
+import { getInstances, type WhatsAppInstance } from './services/whatsapp'
+import { toast } from 'sonner'
 import type { LucideIcon } from 'lucide-react'
 import {
   AlertTriangle,
@@ -113,33 +118,6 @@ const attentionRows = [
     sla: '11 min',
     priority: 'Normal',
     agent: 'Lia',
-  },
-]
-
-const receptionistCards = [
-  {
-    name: 'Lia',
-    area: 'Atendimento e agendamentos',
-    status: 'Ativa',
-    conversations: 428,
-    quality: '94%',
-    version: 'v2.8',
-  },
-  {
-    name: 'Maya',
-    area: 'Vendas e qualificação',
-    status: 'Ativa',
-    conversations: 316,
-    quality: '91%',
-    version: 'v1.9',
-  },
-  {
-    name: 'Nina',
-    area: 'Pós-venda e suporte',
-    status: 'Rascunho',
-    conversations: 0,
-    quality: '—',
-    version: 'v0.4',
   },
 ]
 
@@ -784,6 +762,57 @@ function AttentionView() {
 }
 
 function AgentsView() {
+  const { user } = useAuth()
+  const [agents, setAgents] = useState<AiAgent[]>([])
+  const [instances, setInstances] = useState<WhatsAppInstance[]>([])
+  const [loading, setLoading] = useState(true)
+  const [formOpen, setFormOpen] = useState(false)
+  const [selectedAgent, setSelectedAgent] = useState<AiAgent | null>(null)
+
+  const loadData = useCallback(async () => {
+    if (!user) return
+    try {
+      const [agentRows, instanceRows] = await Promise.all([getAiAgents(), getInstances()])
+      setAgents(agentRows)
+      setInstances(instanceRows)
+    } catch {
+      toast.error('Não foi possível carregar as recepcionistas.')
+    } finally {
+      setLoading(false)
+    }
+  }, [user])
+
+  useEffect(() => {
+    void loadData()
+  }, [loadData])
+
+  useRealtime('ai_agents', () => void loadData(), !!user, user?.id || '')
+  useRealtime('whatsapp_instances', () => void loadData(), !!user, user?.id || '')
+
+  const connectedInstance = instances.find((instance) => instance.status === 'connected')
+  const canCreate = !!connectedInstance && agents.length === 0
+
+  const openAgent = (agent: AiAgent | null) => {
+    setSelectedAgent(agent)
+    setFormOpen(true)
+  }
+
+  const toggleAgent = async (agent: AiAgent) => {
+    const active = !agent.active
+    setAgents((current) =>
+      current.map((item) => (item.id === agent.id ? { ...item, active } : item)),
+    )
+    try {
+      await updateAiAgent(agent.id, { active })
+      toast.success(`Recepcionista ${active ? 'ativada' : 'pausada'} com sucesso.`)
+    } catch {
+      setAgents((current) =>
+        current.map((item) => (item.id === agent.id ? { ...item, active: agent.active } : item)),
+      )
+      toast.error('Não foi possível alterar o estado da recepcionista.')
+    }
+  }
+
   return (
     <div className="mx-auto max-w-[1600px] space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -793,61 +822,114 @@ function AgentsView() {
             Configure personalidade, conhecimento, regras e autonomia.
           </p>
         </div>
-        <button className="flex items-center justify-center gap-2 rounded-full bg-[#25D366] px-4 py-2.5 text-sm font-bold text-[#0A0A0A]">
+        <button
+          type="button"
+          disabled={!canCreate}
+          onClick={() => openAgent(null)}
+          title={
+            !connectedInstance
+              ? 'Conecte seu WhatsApp antes de criar a recepcionista.'
+              : agents.length > 0
+                ? 'Esta sessão já possui uma recepcionista configurada.'
+                : undefined
+          }
+          className="flex items-center justify-center gap-2 rounded-full bg-[#25D366] px-4 py-2.5 text-sm font-bold text-[#0A0A0A] transition hover:bg-[#1EBE5A] disabled:cursor-not-allowed disabled:opacity-45"
+        >
           <Plus className="h-4 w-4" />
           Nova recepcionista
         </button>
       </div>
-      <div className="grid gap-5 lg:grid-cols-3">
-        {receptionistCards.map((agent, index) => (
-          <article
-            key={agent.name}
-            className="rounded-[24px] border border-neutral-200/80 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#141414]"
-          >
-            <div className="flex items-start justify-between">
-              <div
-                className={
-                  'flex h-12 w-12 items-center justify-center rounded-full text-lg font-semibold ' +
-                  (index === 0
-                    ? 'bg-[#25D366] text-[#0A0A0A]'
-                    : index === 1
-                      ? 'bg-[#0A0A0A] text-[#25D366] dark:bg-white dark:text-[#0A0A0A]'
-                      : 'bg-neutral-200 text-neutral-500')
-                }
-              >
-                {agent.name[0]}
+
+      {loading ? (
+        <div className="rounded-[24px] border border-neutral-200/80 bg-white p-10 text-center text-sm text-neutral-500 dark:border-white/10 dark:bg-[#141414] dark:text-neutral-400">
+          Carregando configuração da recepcionista...
+        </div>
+      ) : agents.length === 0 ? (
+        <section className="rounded-[28px] border border-dashed border-neutral-300 bg-white p-10 text-center dark:border-white/15 dark:bg-[#141414]">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#EAFBF0] text-[#128C7E] dark:bg-[#25D366]/10 dark:text-[#25D366]">
+            <Bot className="h-6 w-6" />
+          </div>
+          <h3 className="mt-4 text-lg font-semibold">Nenhuma recepcionista configurada</h3>
+          <p className="mx-auto mt-2 max-w-xl text-sm text-neutral-500 dark:text-neutral-400">
+            {connectedInstance
+              ? 'Crie a recepcionista, informe as instruções e mantenha-a pausada até validar a chave e o comportamento.'
+              : 'Conecte o WhatsApp deste usuário em Integrações antes de configurar a recepcionista.'}
+          </p>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => openAgent(null)}
+              className="mt-5 rounded-full bg-[#25D366] px-5 py-2.5 text-sm font-bold text-[#0A0A0A]"
+            >
+              Configurar primeira recepcionista
+            </button>
+          )}
+        </section>
+      ) : (
+        <div className="grid gap-5 lg:grid-cols-3">
+          {agents.map((agent, index) => (
+            <article
+              key={agent.id}
+              className="rounded-[24px] border border-neutral-200/80 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#141414]"
+            >
+              <div className="flex items-start justify-between">
+                <div
+                  className={
+                    'flex h-12 w-12 items-center justify-center rounded-full text-lg font-semibold ' +
+                    (index === 0
+                      ? 'bg-[#25D366] text-[#0A0A0A]'
+                      : 'bg-[#0A0A0A] text-[#25D366] dark:bg-white dark:text-[#0A0A0A]')
+                  }
+                >
+                  {agent.name.charAt(0).toUpperCase()}
+                </div>
+                <StatusPill tone={agent.active ? 'success' : 'neutral'}>
+                  {agent.active ? 'Ativa' : 'Pausada'}
+                </StatusPill>
               </div>
-              <StatusPill tone={agent.status === 'Ativa' ? 'success' : 'neutral'}>
-                {agent.status}
-              </StatusPill>
-            </div>
-            <h3 className="mt-4 text-xl font-semibold">{agent.name}</h3>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">{agent.area}</p>
-            <div className="mt-5 grid grid-cols-3 gap-3 border-y border-neutral-100 py-4 text-center dark:border-white/10">
-              <div>
-                <p className="font-semibold">{agent.conversations}</p>
-                <p className="text-[10px] uppercase text-neutral-400">Conversas</p>
+              <h3 className="mt-4 text-xl font-semibold">{agent.name}</h3>
+              <p className="line-clamp-2 min-h-10 text-sm text-neutral-500 dark:text-neutral-400">
+                {agent.description || 'Atendimento automático pelo WhatsApp.'}
+              </p>
+              <div className="mt-5 grid grid-cols-3 gap-3 border-y border-neutral-100 py-4 text-center dark:border-white/10">
+                <div>
+                  <p className="font-semibold">
+                    {agent.provider === 'openai' ? 'OpenAI' : 'Gemini'}
+                  </p>
+                  <p className="text-[10px] uppercase text-neutral-400">Provedor</p>
+                </div>
+                <div>
+                  <p className="font-semibold">
+                    {agent.expand?.instance_id?.status === 'connected' ? 'Online' : 'Offline'}
+                  </p>
+                  <p className="text-[10px] uppercase text-neutral-400">WhatsApp</p>
+                </div>
+                <div>
+                  <p className="font-semibold">Protegida</p>
+                  <p className="text-[10px] uppercase text-neutral-400">Chave</p>
+                </div>
               </div>
-              <div>
-                <p className="font-semibold">{agent.quality}</p>
-                <p className="text-[10px] uppercase text-neutral-400">Qualidade</p>
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => openAgent(agent)}
+                  className="flex-1 rounded-full bg-[#0A0A0A] py-2.5 text-sm font-bold text-white dark:bg-white dark:text-neutral-900"
+                >
+                  Configurar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void toggleAgent(agent)}
+                  className="rounded-full border border-neutral-200 px-4 py-2.5 text-xs font-bold dark:border-white/10"
+                >
+                  {agent.active ? 'Pausar' : 'Ativar'}
+                </button>
               </div>
-              <div>
-                <p className="font-semibold">{agent.version}</p>
-                <p className="text-[10px] uppercase text-neutral-400">Versão</p>
-              </div>
-            </div>
-            <div className="mt-4 flex gap-2">
-              <button className="flex-1 rounded-full bg-[#0A0A0A] py-2.5 text-sm font-bold text-white dark:bg-white dark:text-neutral-900">
-                Configurar
-              </button>
-              <button className="rounded-full border border-neutral-200 p-2.5 dark:border-white/10">
-                <MoreHorizontal className="h-4 w-4" />
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
+            </article>
+          ))}
+        </div>
+      )}
+
       <section className="rounded-[28px] bg-[#0A0A0A] p-6 text-white sm:p-8 lg:flex lg:items-center lg:justify-between">
         <div className="flex items-start gap-4">
           <div className="rounded-full bg-[#25D366] p-3 text-[#0A0A0A]">
@@ -861,10 +943,20 @@ function AgentsView() {
             </p>
           </div>
         </div>
-        <button className="mt-4 shrink-0 rounded-full bg-[#25D366] px-5 py-2.5 text-sm font-semibold text-[#0A0A0A] transition hover:bg-[#1EBE5A] lg:mt-0">
-          Abrir simulador
+        <button
+          disabled
+          className="mt-4 shrink-0 cursor-not-allowed rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white/55 lg:mt-0"
+        >
+          Simulador na próxima etapa
         </button>
       </section>
+
+      <AgentFormSheet
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        agent={selectedAgent}
+        onSaved={loadData}
+      />
     </div>
   )
 }

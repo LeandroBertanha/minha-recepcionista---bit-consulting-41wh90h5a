@@ -74,6 +74,7 @@ onRecordAfterCreateSuccess(async (e) => {
 
   const provider = agent.getString('provider')
   const apiKey = agent.getString('api_key')
+  const requestId = 'ai_' + $security.randomString(8)
 
   if (!provider || !apiKey) {
     $app.logger().error('AI Agent missing provider or api_key', 'agent_id', agent.id)
@@ -127,17 +128,17 @@ onRecordAfterCreateSuccess(async (e) => {
 
     if (!combinedBody) return e.next()
 
-    const model = provider === 'openai' ? 'gpt-3.5-turbo' : 'gemini-1.5-flash'
+    const model = provider === 'openai' ? 'gpt-6-luna' : 'gemini-1.5-flash'
 
     let requestUrl = ''
     let headers = {}
     let body = {}
 
     if (provider === 'openai') {
-      requestUrl = 'https://api.openai.com/v1/chat/completions'
+      requestUrl = 'https://api.openai.com/v1/responses'
       headers = { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' }
 
-      const messages = [{ role: 'system', content: sysPrompt }]
+      const messages = []
       for (let m of pastHistory) {
         if (m.getString('body')) {
           messages.push({
@@ -152,7 +153,13 @@ onRecordAfterCreateSuccess(async (e) => {
         content: combinedBody,
       })
 
-      body = { model: model, messages: messages, max_tokens: 500 }
+      body = {
+        model: model,
+        instructions: sysPrompt,
+        input: messages,
+        max_output_tokens: 500,
+        store: false,
+      }
     } else if (provider === 'gemini') {
       requestUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
       headers = { 'Content-Type': 'application/json' }
@@ -188,6 +195,9 @@ onRecordAfterCreateSuccess(async (e) => {
         contents: geminiContents,
         generationConfig: { maxOutputTokens: 500 },
       }
+    } else {
+      $app.logger().error('Unsupported AI provider', 'request_id', requestId, 'agent_id', agent.id)
+      return e.next()
     }
 
     const completionRes = $http.send({
@@ -204,12 +214,16 @@ onRecordAfterCreateSuccess(async (e) => {
     let reply = ''
     if (completionRes.statusCode === 200) {
       if (provider === 'openai') {
-        if (
-          completionRes.json &&
-          completionRes.json.choices &&
-          completionRes.json.choices.length > 0
-        ) {
-          reply = completionRes.json.choices[0].message.content
+        const output = completionRes.json && completionRes.json.output
+        if (output && output.length > 0) {
+          const textParts = []
+          for (const item of output) {
+            if (item.type !== 'message' || !item.content) continue
+            for (const content of item.content) {
+              if (content.type === 'output_text' && content.text) textParts.push(content.text)
+            }
+          }
+          reply = textParts.join('\n').trim()
         }
       } else if (provider === 'gemini') {
         if (
@@ -266,41 +280,29 @@ onRecordAfterCreateSuccess(async (e) => {
           contact.set('last_message_at', new Date().toISOString())
           $app.saveNoValidate(contact)
         } else {
-          $app.logger().error('Evolution send failed', 'status', res.statusCode)
+          $app
+            .logger()
+            .error('Evolution send failed', 'request_id', requestId, 'status', res.statusCode)
         }
       } else {
-        $app.logger().error('Evolution config missing')
+        $app.logger().error('Evolution config missing', 'request_id', requestId)
       }
     } else {
-      const errMsg = '⚠️ Falha na resposta da IA (Status ' + completionRes.statusCode + ')'
-      const msgsCol = $app.findCollectionByNameOrId('whatsapp_messages')
-      const msgRecord = new Record(msgsCol)
-      msgRecord.set('user_id', contact.getString('user_id'))
-      msgRecord.set('organization_id', organizationId)
-      msgRecord.set('instance_id', instance.id)
-      msgRecord.set('contact_id', contact.id)
-      msgRecord.set('remote_jid', contact.getString('remote_jid'))
-      msgRecord.set('message_id', 'err_' + $security.randomString(10))
-      msgRecord.set('direction', 'out')
-      msgRecord.set('body', errMsg)
-      msgRecord.set('type', 'text')
-      msgRecord.set('sent_at', new Date().toISOString())
-      $app.saveNoValidate(msgRecord)
-
       $app
         .logger()
         .error(
-          'AI Error',
+          'AI provider returned no usable response',
+          'request_id',
+          requestId,
+          'provider',
+          provider,
           'status',
           completionRes.statusCode,
-          'url',
-          requestUrl,
-          'body',
-          JSON.stringify(completionRes.json || {}),
         )
     }
   } catch (err) {
-    $app.logger().error('AI response failed', 'error', String(err))
+    const errorType = err && err.name ? err.name : 'request_failed'
+    $app.logger().error('AI response failed', 'request_id', requestId, 'error_type', errorType)
   }
 
   e.next()

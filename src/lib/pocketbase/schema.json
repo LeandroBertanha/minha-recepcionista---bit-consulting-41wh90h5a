@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-12T23:37:11.447Z",
+  "generatedAt": "2026-11-13T00:08:30.503Z",
   "collections": [
     {
       "name": "users",
@@ -393,12 +393,6 @@
           "required": true,
           "system": false,
           "selectValues": ["gemini", "openai"]
-        },
-        {
-          "name": "api_key",
-          "type": "text",
-          "required": true,
-          "system": false
         },
         {
           "name": "organization_id",

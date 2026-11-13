@@ -55,7 +55,7 @@ cronAdd('crm_status_updates', '*/1 * * * *', () => {
       try {
         const agent = $app.findFirstRecordByFilter(
           'ai_agents',
-          'organization_id = {:organizationId} && instance_id = {:instanceId} && user_id = {:userId}',
+          'organization_id = {:organizationId} && instance_id = {:instanceId} && user_id = {:userId} && active = true',
           {
             organizationId,
             instanceId,
@@ -76,31 +76,37 @@ Responda APENAS com a palavra "lost" se o cliente desistiu, parou de responder n
 Histórico:
 ${historyText}`
 
-        let aiUrl =
-          provider === 'openai'
-            ? 'https://api.openai.com/v1/chat/completions'
-            : 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' +
-              apiKey
-
         if (provider === 'openai') {
           const res = $http.send({
-            url: aiUrl,
+            url: 'https://api.openai.com/v1/responses',
             method: 'POST',
             body: JSON.stringify({
-              model: 'gpt-4o-mini',
-              messages: [{ role: 'user', content: aiPrompt }],
-              temperature: 0.1,
+              model: 'gpt-6-luna',
+              input: aiPrompt,
+              max_output_tokens: 16,
+              store: false,
             }),
             headers: {
               'Content-Type': 'application/json',
               Authorization: 'Bearer ' + apiKey,
             },
           })
-          if (res.statusCode === 200 && res.json && res.json.choices && res.json.choices[0]) {
-            const answer = res.json.choices[0].message.content.toLowerCase()
+          const output = res.json && res.json.output
+          if (res.statusCode === 200 && output && output.length > 0) {
+            const textParts = []
+            for (const item of output) {
+              if (item.type !== 'message' || !item.content) continue
+              for (const content of item.content) {
+                if (content.type === 'output_text' && content.text) textParts.push(content.text)
+              }
+            }
+            const answer = textParts.join('\n').toLowerCase()
             if (answer.includes('lost')) newStatus = 'lost'
           }
-        } else {
+        } else if (provider === 'gemini') {
+          const aiUrl =
+            'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' +
+            apiKey
           const res = $http.send({
             url: aiUrl,
             method: 'POST',
@@ -119,9 +125,10 @@ ${historyText}`
       contact.set('status', newStatus)
       $app.save(contact)
     } catch (e) {
+      const errorType = e && e.name ? e.name : 'classification_failed'
       $app
         .logger()
-        .error('Error in AI classification', 'contact', contact.id, 'error', e.toString())
+        .error('Error in AI classification', 'contact', contact.id, 'error_type', errorType)
       contact.set('status', 'resolved')
       $app.save(contact)
     }

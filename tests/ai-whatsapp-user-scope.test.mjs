@@ -72,7 +72,19 @@ async function execute({ contactInstance = 'richard-instance', contactOrganizati
         const call = JSON.parse(JSON.stringify(request))
         calls.push(call)
         if (call.url === 'https://httpbin.org/delay/7') return { statusCode: 200 }
-        if (call.url === 'https://api.openai.com/v1/chat/completions') return { statusCode: 200, json: { choices: [{ message: { content: 'Resposta isolada' } }] } }
+        if (call.url === 'https://api.openai.com/v1/responses') {
+          return {
+            statusCode: 200,
+            json: {
+              output: [
+                {
+                  type: 'message',
+                  content: [{ type: 'output_text', text: 'Resposta isolada' }],
+                },
+              ],
+            },
+          }
+        }
         if (call.url === 'https://evolution.example.test/message/sendText/session-richard') return { statusCode: 201, json: { key: { id: 'ai-provider-id' } } }
         throw new Error('Chamada externa inesperada')
       },
@@ -99,10 +111,17 @@ for (const [description, fixture] of [
 
 test('IA usa somente o agente, histórico e instância do login que recebeu a mensagem', async () => {
   const result = await execute()
-  const completion = result.calls.find((call) => call.url === 'https://api.openai.com/v1/chat/completions')
+  const completion = result.calls.find(
+    (call) => call.url === 'https://api.openai.com/v1/responses',
+  )
   assert.ok(completion)
   assert.equal(completion.headers.Authorization, 'Bearer own-fixture-key')
+  const request = JSON.parse(completion.body)
+  assert.equal(request.model, 'gpt-6-luna')
+  assert.equal(request.store, false)
+  assert.equal(request.max_output_tokens, 500)
   assert.doesNotMatch(completion.body, /Histórico privado de outro login|Fonte de outro login/)
+  assert.doesNotMatch(completion.body, /own-fixture-key|foreign-fixture-key/)
   assert.match(completion.body, /Pergunta de Richard/)
   const send = result.calls.find((call) => call.url.includes('/message/sendText/'))
   assert.equal(send.url, 'https://evolution.example.test/message/sendText/session-richard')

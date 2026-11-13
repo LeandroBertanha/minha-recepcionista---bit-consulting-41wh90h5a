@@ -3,17 +3,6 @@ import type { RecordModel, RecordSubscription } from 'pocketbase'
 
 import pb from '@/lib/pocketbase/client'
 
-const REALTIME_CLEANUP_GRACE_MS = 250
-
-const releaseSubscription = (unsubscribe: () => Promise<void>) => {
-  // Uma troca rápida de rota normalmente registra o novo listener antes deste
-  // prazo. O pequeno atraso evita enviar ao PocketBase uma atualização usando
-  // o clientId de uma conexão SSE que acabou de ser substituída.
-  window.setTimeout(() => {
-    unsubscribe().catch(() => {})
-  }, REALTIME_CLEANUP_GRACE_MS)
-}
-
 /**
  * Hook for real-time subscriptions to a PocketBase collection.
  * ALWAYS use this hook instead of subscribing inline.
@@ -45,7 +34,7 @@ export function useRealtime<TRecord extends RecordModel = RecordModel>(
       })
       .then((fn) => {
         if (cancelled) {
-          releaseSubscription(fn)
+          fn().catch(() => {})
         } else {
           unsubscribeFn = fn
         }
@@ -55,7 +44,7 @@ export function useRealtime<TRecord extends RecordModel = RecordModel>(
     return () => {
       cancelled = true
       if (unsubscribeFn) {
-        releaseSubscription(unsubscribeFn)
+        unsubscribeFn().catch(() => {})
       }
     }
   }, [collectionName, enabled, scopeKey])

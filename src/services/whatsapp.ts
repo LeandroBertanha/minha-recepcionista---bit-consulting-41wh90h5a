@@ -1,5 +1,15 @@
 import pb from '@/lib/pocketbase/client'
 
+export type WhatsAppInstance = {
+  id: string
+  user_id: string
+  organization_id: string
+  instance_name: string
+  status: string
+  created: string
+  updated: string
+}
+
 export type IntegrationStatus = {
   ready: boolean
   evolution: {
@@ -28,7 +38,7 @@ const requireUserId = () => {
 
 export const getInstances = (organizationId?: string) => {
   const userId = requireUserId()
-  return pb.collection('whatsapp_instances').getFullList({
+  return pb.collection<WhatsAppInstance>('whatsapp_instances').getFullList({
     sort: '-created',
     filter: pb.filter(
       'user_id = {:userId}' + (organizationId ? ' && organization_id = {:organizationId}' : ''),
