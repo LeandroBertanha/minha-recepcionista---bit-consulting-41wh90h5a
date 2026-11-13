@@ -16,6 +16,24 @@ test('tela de recepcionistas usa registros reais e formulário persistente', asy
   assert.doesNotMatch(app, /receptionistCards/)
 })
 
+test('painel de recepcionistas mantém ações tipadas e atualiza a lista após exclusão', async () => {
+  const [app, board, deleteDialog] = await Promise.all([
+    readProjectFile('src/App.tsx'),
+    readProjectFile('src/components/agents/AgentsBoard.tsx'),
+    readProjectFile('src/components/agents/DeleteAgentDialog.tsx'),
+  ])
+
+  assert.match(app, /<AgentCard/)
+  assert.match(app, /onDeleted=\{loadData\}/)
+  assert.match(app, /togglingId === agent\.id/)
+  assert.match(board, /agent: AiAgent/)
+  assert.match(board, /instance\?: WhatsAppInstance/)
+  assert.match(deleteDialog, /agent: AiAgent \| null/)
+  assert.match(deleteDialog, /await onDeleted\(\)/)
+  assert.match(deleteDialog, /disabled=\{deleting\}/)
+  assert.doesNotMatch(deleteDialog, /agent: any/)
+})
+
 test('estado remoto conectado libera a recepcionista sem alterar a instância no banco', async () => {
   const service = await readProjectFile('src/services/whatsapp.ts')
 
@@ -32,12 +50,11 @@ test('consulta de instâncias não envia parâmetro de organização indefinido'
   assert.doesNotMatch(service, /\{ userId, organizationId \},\s*\)\s*,/)
 })
 
-test('edição nunca reutiliza nem envia a chave já armazenada', async () => {
+test('formulário nunca solicita nem envia chave de provedor pelo navegador', async () => {
   const form = await readProjectFile('src/components/agents/AgentFormSheet.tsx')
 
-  assert.doesNotMatch(form, /agent\.api_key/)
-  assert.match(form, /api_key: ''/)
-  assert.match(form, /if \(apiKey\) data\.api_key = apiKey/)
+  assert.doesNotMatch(form, /api_key|Chave da API|type="password"/)
+  assert.match(form, /credencial do provedor é gerenciada com segurança no servidor/)
   assert.match(form, /active: false/)
 })
 
@@ -83,10 +100,15 @@ test('hooks OpenAI usam Responses API sem registrar corpo ou URL sensível', asy
     assert.match(source, /gpt-6-luna/)
     assert.match(source, /store: false/)
     assert.doesNotMatch(source, /chat\/completions|gpt-3\.5-turbo|gpt-4o-mini/)
+    assert.doesNotMatch(source, /getString\('api_key'\)/)
   }
 
+  assert.match(messageHook, /\$secrets\.get\('OPENAI_API_KEY'\)/)
+  assert.match(crmHook, /\$secrets\.get\('OPENAI_API_KEY'\)/)
   assert.doesNotMatch(messageHook, /JSON\.stringify\(completionRes\.json/)
   assert.doesNotMatch(messageHook, /'url',\s*requestUrl/)
-  assert.doesNotMatch(messageHook, /⚠️ Falha na resposta da IA/)
+  assert.doesNotMatch(messageHook, /Falha na resposta da IA/)
   assert.doesNotMatch(crmHook, /e\.toString\(\)/)
 })
+
+

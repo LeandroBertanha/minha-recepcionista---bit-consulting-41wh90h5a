@@ -51,7 +51,6 @@ cronAdd('crm_status_updates', '*/1 * * * *', () => {
       if (!historyText.trim()) historyText = 'Sem mensagens.'
 
       let provider = 'openai'
-      let apiKey = ''
       try {
         const agent = $app.findFirstRecordByFilter(
           'ai_agents',
@@ -63,8 +62,14 @@ cronAdd('crm_status_updates', '*/1 * * * *', () => {
           },
         )
         provider = agent.getString('provider')
-        apiKey = agent.getString('api_key')
       } catch (err) {}
+
+      const apiKey =
+        provider === 'openai'
+          ? $secrets.get('OPENAI_API_KEY') || ''
+          : provider === 'gemini'
+            ? $secrets.get('GEMINI_API_KEY') || ''
+            : ''
 
       let newStatus = 'resolved'
 
@@ -81,7 +86,7 @@ ${historyText}`
             url: 'https://api.openai.com/v1/responses',
             method: 'POST',
             body: JSON.stringify({
-              model: 'gpt-6-luna',
+              model: $secrets.get('OPENAI_MODEL') || 'gpt-6-luna',
               input: aiPrompt,
               max_output_tokens: 16,
               store: false,
@@ -105,7 +110,9 @@ ${historyText}`
           }
         } else if (provider === 'gemini') {
           const aiUrl =
-            'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' +
+            'https://generativelanguage.googleapis.com/v1beta/models/' +
+            ($secrets.get('GEMINI_MODEL') || 'gemini-1.5-flash') +
+            ':generateContent?key=' +
             apiKey
           const res = $http.send({
             url: aiUrl,

@@ -73,11 +73,20 @@ onRecordAfterCreateSuccess(async (e) => {
   const agent = agents[0]
 
   const provider = agent.getString('provider')
-  const apiKey = agent.getString('api_key')
   const requestId = 'ai_' + $security.randomString(8)
+  let apiKey = ''
 
-  if (!provider || !apiKey) {
-    $app.logger().error('AI Agent missing provider or api_key', 'agent_id', agent.id)
+  if (provider === 'openai') apiKey = $secrets.get('OPENAI_API_KEY') || ''
+  else if (provider === 'gemini') apiKey = $secrets.get('GEMINI_API_KEY') || ''
+  else {
+    $app.logger().error('Unsupported AI provider', 'request_id', requestId, 'agent_id', agent.id)
+    return e.next()
+  }
+
+  if (!apiKey) {
+    $app
+      .logger()
+      .error('AI provider credential missing', 'request_id', requestId, 'provider', provider)
     return e.next()
   }
 
@@ -128,7 +137,10 @@ onRecordAfterCreateSuccess(async (e) => {
 
     if (!combinedBody) return e.next()
 
-    const model = provider === 'openai' ? 'gpt-6-luna' : 'gemini-1.5-flash'
+    const model =
+      provider === 'openai'
+        ? $secrets.get('OPENAI_MODEL') || 'gpt-6-luna'
+        : $secrets.get('GEMINI_MODEL') || 'gemini-1.5-flash'
 
     let requestUrl = ''
     let headers = {}
@@ -195,9 +207,6 @@ onRecordAfterCreateSuccess(async (e) => {
         contents: geminiContents,
         generationConfig: { maxOutputTokens: 500 },
       }
-    } else {
-      $app.logger().error('Unsupported AI provider', 'request_id', requestId, 'agent_id', agent.id)
-      return e.next()
     }
 
     const completionRes = $http.send({

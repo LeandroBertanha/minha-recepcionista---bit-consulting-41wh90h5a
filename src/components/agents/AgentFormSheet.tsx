@@ -38,7 +38,6 @@ const formSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório'),
   description: z.string().optional(),
   provider: z.enum(['gemini', 'openai'], { error: 'Provedor é obrigatório' }),
-  api_key: z.string().optional(),
   system_prompt: z.string().min(1, 'Prompt do sistema é obrigatório'),
   active: z.boolean(),
 })
@@ -62,7 +61,6 @@ export function AgentFormSheet({ open, onOpenChange, agent, onSaved }: AgentForm
       name: '',
       description: '',
       provider: 'openai',
-      api_key: '',
       system_prompt: '',
       active: false,
     },
@@ -86,7 +84,6 @@ export function AgentFormSheet({ open, onOpenChange, agent, onSaved }: AgentForm
         name: agent.name,
         description: agent.description || '',
         provider: agent.provider || 'openai',
-        api_key: '',
         system_prompt: agent.system_prompt,
         active: agent.active,
       })
@@ -95,7 +92,6 @@ export function AgentFormSheet({ open, onOpenChange, agent, onSaved }: AgentForm
         name: '',
         description: '',
         provider: 'openai',
-        api_key: '',
         system_prompt: '',
         active: false,
       })
@@ -104,12 +100,6 @@ export function AgentFormSheet({ open, onOpenChange, agent, onSaved }: AgentForm
 
   const onSubmit = async (values: AgentFormValues) => {
     if (!user) return
-    const apiKey = values.api_key?.trim() || ''
-    if (!agent && !apiKey) {
-      form.setError('api_key', { message: 'Chave da API é obrigatória' })
-      return
-    }
-
     try {
       const preferredInstance =
         instances.find((item) => item.status === 'connected') || instances[0]
@@ -138,7 +128,6 @@ export function AgentFormSheet({ open, onOpenChange, agent, onSaved }: AgentForm
         organization_id: organizationId,
         instance_id: instanceId,
       }
-      if (apiKey) data.api_key = apiKey
 
       if (agent) {
         await updateAiAgent(agent.id, data)
@@ -202,7 +191,7 @@ export function AgentFormSheet({ open, onOpenChange, agent, onSaved }: AgentForm
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
               <FormField
                 control={form.control}
                 name="provider"
@@ -228,29 +217,10 @@ export function AgentFormSheet({ open, onOpenChange, agent, onSaved }: AgentForm
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="api_key"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{agent ? 'Nova chave da API (opcional)' : 'Chave da API'}</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="password"
-                        autoComplete="new-password"
-                        placeholder={agent ? 'Deixe vazio para manter a chave atual' : 'sk-...'}
-                        {...field}
-                      />
-                    </FormControl>
-                    {agent && (
-                      <p className="text-[11.5px] text-zinc-500 dark:text-neutral-400">
-                        A chave salva nunca é exibida pelo sistema.
-                      </p>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <p className="text-[11.5px] leading-5 text-zinc-500 dark:text-neutral-400">
+                A credencial do provedor é gerenciada com segurança no servidor e nunca é enviada ao
+                navegador.
+              </p>
             </div>
             <FormField
               control={form.control}
@@ -279,7 +249,7 @@ export function AgentFormSheet({ open, onOpenChange, agent, onSaved }: AgentForm
                       Agente Ativo
                     </FormLabel>
                     <p className="text-[12.5px] text-zinc-500 dark:text-neutral-400">
-                      Ative somente depois de validar as instruções e a chave.
+                      Ative somente depois de validar as instruções e a integração.
                     </p>
                   </div>
                   <FormControl>

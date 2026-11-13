@@ -25,7 +25,12 @@ function matches(row, filter, params = {}) {
   return true
 }
 
-async function execute({ contactInstance = 'richard-instance', contactOrganization = 'company-1', messageUser = 'richard' } = {}) {
+async function execute({
+  contactInstance = 'richard-instance',
+  contactOrganization = 'company-1',
+  messageUser = 'richard',
+  openAiKey = 'server-fixture-key',
+} = {}) {
   const current = record({
     id: 'incoming-richard', direction: 'in', user_id: messageUser,
     organization_id: 'company-1', instance_id: 'richard-instance',
@@ -52,7 +57,15 @@ async function execute({ contactInstance = 'richard-instance', contactOrganizati
     onRecordAfterCreateSuccess(fn) { handler = fn },
     Record: class { constructor() { return record({ id: 'new-ai-message' }) } },
     $security: { randomString: () => 'fixture-id' },
-    $secrets: { get: (name) => ({ EVOLUTION_API_URL: 'https://evolution.example.test', EVOLUTION_API_KEY: 'evolution-fixture-key' })[name] },
+    $secrets: {
+      get: (name) =>
+        ({
+          EVOLUTION_API_URL: 'https://evolution.example.test',
+          EVOLUTION_API_KEY: 'evolution-fixture-key',
+          OPENAI_API_KEY: openAiKey,
+          OPENAI_MODEL: 'gpt-6-luna',
+        })[name],
+    },
     $app: {
       findRecordById(collection, id) {
         if (collection === 'whatsapp_contacts' && id === contact.id) return contact
@@ -115,7 +128,7 @@ test('IA usa somente o agente, histórico e instância do login que recebeu a me
     (call) => call.url === 'https://api.openai.com/v1/responses',
   )
   assert.ok(completion)
-  assert.equal(completion.headers.Authorization, 'Bearer own-fixture-key')
+  assert.equal(completion.headers.Authorization, 'Bearer server-fixture-key')
   const request = JSON.parse(completion.body)
   assert.equal(request.model, 'gpt-6-luna')
   assert.equal(request.store, false)
@@ -131,3 +144,16 @@ test('IA usa somente o agente, histórico e instância do login que recebeu a me
   assert.equal(response.organization_id, 'company-1')
   assert.equal(response.contact_id, 'richard-contact')
 })
+
+test('IA não chama o provedor quando o segredo OpenAI não está configurado', async () => {
+  const result = await execute({ openAiKey: '' })
+
+  assert.equal(
+    result.calls.filter((call) => call.url === 'https://api.openai.com/v1/responses').length,
+    0,
+  )
+  assert.equal(result.calls.filter((call) => call.url.includes('/message/sendText/')).length, 0)
+  assert.equal(result.saves.length, 0)
+  assert.equal(result.nextCount, 1)
+})
+
