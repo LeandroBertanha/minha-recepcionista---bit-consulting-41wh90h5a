@@ -91,6 +91,14 @@ export const ensureOwnInstance = (organizationId: string) => {
   })
 }
 
+export const prepareDedicatedInstance = (organizationId: string) => {
+  requireUserId()
+  return pb.send<{ instance: WhatsAppInstance; created: boolean }>('/backend/v1/instance/ensure', {
+    method: 'POST',
+    body: { organization_id: organizationId, dedicated: true },
+  })
+}
+
 export const getIntegrationStatus = () =>
   pb.send<IntegrationStatus>('/backend/v1/integration/status', { method: 'GET' })
 

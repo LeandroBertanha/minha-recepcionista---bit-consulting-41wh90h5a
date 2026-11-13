@@ -108,11 +108,9 @@ export function AgentCardSkeleton() {
 
 export function AgentsEmptyState({
   canCreate,
-  connected,
   onCreate,
 }: {
   canCreate: boolean
-  connected: boolean
   onCreate: () => void
 }) {
   return (
@@ -125,26 +123,14 @@ export function AgentsEmptyState({
         Nenhuma recepcionista configurada
       </h3>
       <p className="relative mx-auto mt-2 max-w-xl text-sm leading-6 text-neutral-500 dark:text-neutral-400">
-        {connected
-          ? 'Crie a recepcionista, informe as instruções e mantenha-a pausada até validar a chave e o comportamento.'
-          : 'Conecte o WhatsApp deste usuário em Integrações antes de configurar a recepcionista.'}
+        Crie a recepcionista, escolha um modelo de atendimento e conecte o WhatsApp durante a
+        configuração.
       </p>
       <div className="relative mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
-        <NewReceptionistButton
-          disabled={!canCreate}
-          reason={
-            connected
-              ? undefined
-              : 'Conecte seu WhatsApp em Integrações para criar uma recepcionista.'
-          }
-          onClick={onCreate}
-          className="px-5"
-        />
-        {!connected && (
-          <p className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-400">
-            <Plug className="h-3.5 w-3.5" />A conexão fica na tela Integrações.
-          </p>
-        )}
+        <NewReceptionistButton disabled={!canCreate} onClick={onCreate} className="px-5" />
+        <p className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-400">
+          <Plug className="h-3.5 w-3.5" /> Um WhatsApp exclusivo por recepcionista.
+        </p>
       </div>
     </section>
   )
@@ -156,6 +142,7 @@ export function AgentCard({
   featured,
   toggling,
   onToggle,
+  onOpen,
   onEdit,
   onDelete,
 }: {
@@ -164,6 +151,7 @@ export function AgentCard({
   featured?: boolean
   toggling: boolean
   onToggle: () => void
+  onOpen: () => void
   onEdit: () => void
   onDelete: () => void
 }) {
@@ -245,13 +233,20 @@ export function AgentCard({
         </div>
       </div>
 
-      <div className="mt-5 flex gap-2">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="mt-5 w-full rounded-full bg-[#0A0A0A] py-2.5 text-sm font-bold text-white transition hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+      >
+        Abrir recepcionista
+      </button>
+      <div className="mt-2 flex gap-2">
         <button
           type="button"
           onClick={onEdit}
-          className="flex-1 rounded-full bg-[#0A0A0A] py-2.5 text-sm font-bold text-white transition hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+          className="flex-1 rounded-full border border-neutral-200 py-2.5 text-xs font-bold transition hover:bg-neutral-50 dark:border-white/10 dark:hover:bg-white/[0.06]"
         >
-          Configurar
+          Editar
         </button>
         <button
           type="button"

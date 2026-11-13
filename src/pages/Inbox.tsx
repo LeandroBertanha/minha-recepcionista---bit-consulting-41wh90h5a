@@ -60,12 +60,20 @@ type InboxProps = {
   organizationId: string
   onConnectionSetup: () => void
   initialContactId?: string
+  instanceIdOverride?: string
+  embedded?: boolean
 }
 
-export default function Inbox({ organizationId, onConnectionSetup, initialContactId }: InboxProps) {
+export default function Inbox({
+  organizationId,
+  onConnectionSetup,
+  initialContactId,
+  instanceIdOverride,
+  embedded = false,
+}: InboxProps) {
   const { user } = useAuth()
   const userId = user?.id
-  const scopeKey = `${userId || ''}:${organizationId}`
+  const scopeKey = `${userId || ''}:${organizationId}:${instanceIdOverride || 'default'}`
   const currentScope = useRef(scopeKey)
   const mounted = useRef(false)
   currentScope.current = scopeKey
@@ -157,7 +165,10 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
         const insts = await getInstances(organizationId)
         if (cancelled || currentScope.current !== scopeKey) return
         const ownInstance = insts.find(
-          (record) => record.user_id === userId && record.organization_id === organizationId,
+          (record) =>
+            record.user_id === userId &&
+            record.organization_id === organizationId &&
+            (!instanceIdOverride || record.id === instanceIdOverride),
         )
         setInstance(ownInstance || null)
       } catch (e) {
@@ -176,7 +187,7 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
     return () => {
       cancelled = true
     }
-  }, [organizationId, scopeKey, toast, userId])
+  }, [instanceIdOverride, organizationId, scopeKey, toast, userId])
 
   useEffect(() => {
     let cancelled = false
@@ -241,7 +252,10 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
         if (currentScope.current !== scopeKey) return
         setInstance(
           insts.find(
-            (record) => record.user_id === userId && record.organization_id === organizationId,
+            (record) =>
+              record.user_id === userId &&
+              record.organization_id === organizationId &&
+              (!instanceIdOverride || record.id === instanceIdOverride),
           ) || null,
         )
       } catch (e) {
@@ -724,7 +738,12 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
   }
 
   return (
-    <div className="flex h-[calc(100dvh-160px)] min-h-[420px] w-full overflow-hidden bg-zinc-50/60 dark:bg-[#141414]">
+    <div
+      className={cn(
+        'flex min-h-[420px] w-full overflow-hidden bg-zinc-50/60 dark:bg-[#141414]',
+        embedded ? 'h-full' : 'h-[calc(100dvh-160px)]',
+      )}
+    >
       {/* Sidebar Contacts */}
       <div
         className={cn(
@@ -751,7 +770,7 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
               )}
             </div>
 
-            {instance?.status === 'connected' ? (
+            {!embedded && instance?.status === 'connected' ? (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button
@@ -781,7 +800,7 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
-            ) : (
+            ) : !embedded ? (
               <Button
                 size="sm"
                 onClick={onConnectionSetup}
@@ -789,7 +808,7 @@ export default function Inbox({ organizationId, onConnectionSetup, initialContac
               >
                 Conectar WhatsApp
               </Button>
-            )}
+            ) : null}
           </div>
 
           <div className="relative">

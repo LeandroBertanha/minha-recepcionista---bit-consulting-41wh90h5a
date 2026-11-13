@@ -9,8 +9,8 @@ test('tela de recepcionistas usa registros reais e formulário persistente', asy
   const app = await readProjectFile('src/App.tsx')
 
   assert.match(app, /getAiAgents\(\)/)
-  assert.match(app, /getIntegrationStatus\(\)\.catch\(\(\) => null\)/)
-  assert.match(app, /reconcileInstanceStatus\(instanceRows, integration\)/)
+  assert.match(app, /getInstances\(organizationId\)/)
+  assert.match(app, /instance\.id === agent\.instance_id/)
   assert.match(app, /<AgentFormSheet/)
   assert.match(app, /updateAiAgent\(agent\.id, \{ active \}\)/)
   assert.doesNotMatch(app, /receptionistCards/)
@@ -67,20 +67,20 @@ test('system prompt aceita e informa o limite de 7.000 caracteres', async () => 
   assert.match(form, /field\.value\.length\.toLocaleString\('pt-BR'\)/)
 })
 
-test('simulador usa endpoint autenticado sem enviar WhatsApp nem gravar conversa', async () => {
-  const [app, service, hook] = await Promise.all([
-    readProjectFile('src/App.tsx'),
+test('simulador da recepcionista usa endpoint autenticado sem enviar WhatsApp nem gravar conversa', async () => {
+  const [workspace, service, hook] = await Promise.all([
+    readProjectFile('src/components/agents/AgentWorkspaceDialog.tsx'),
     readProjectFile('src/services/ai_agents.ts'),
     readProjectFile('pocketbase/hooks/on_message_create_ai.js'),
   ])
   const simulatorRoute = hook.slice(hook.indexOf("'/backend/v1/ai/simulate'"))
 
-  assert.match(app, /simulateAiAgent\(simulatorAgent\.id, message\)/)
-  assert.match(app, /Abrir simulador/)
-  assert.match(app, /Resposta da recepcionista/)
-  assert.match(app, /role="alert"/)
-  assert.match(app, /setSimulationError\(responseMessage/)
-  assert.doesNotMatch(app, /Simulador na próxima etapa/)
+  assert.match(workspace, /simulateAiAgent\(agent\.id, customerMessage\)/)
+  assert.match(workspace, /TabsTrigger value="simulator"/)
+  assert.match(workspace, /Resposta da recepcionista/)
+  assert.match(workspace, /role="alert"/)
+  assert.match(workspace, /setSimulationError\(responseMessage/)
+  assert.doesNotMatch(workspace, /Simulador na próxima etapa/)
   assert.match(service, /pb\.send<AiSimulationResult>\('\/backend\/v1\/ai\/simulate'/)
   assert.match(simulatorRoute, /\$apis\.requireAuth\(\)/)
   assert.match(simulatorRoute, /agent\.getString\('user_id'\) !== e\.auth\.id/)

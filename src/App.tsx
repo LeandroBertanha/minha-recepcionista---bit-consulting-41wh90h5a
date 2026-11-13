@@ -2,13 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AuthProvider, useAuth } from './hooks/use-auth'
 import { useRealtime } from './hooks/use-realtime'
 import pb from './lib/pocketbase/client'
-import ConnectionSetup from './pages/ConnectionSetup'
-import Inbox from './pages/Inbox'
 import { AgentFormSheet } from './components/agents/AgentFormSheet'
+import { AgentWorkspaceDialog } from './components/agents/AgentWorkspaceDialog'
 import { Toaster } from './components/ui/toaster'
 import { ProductLogo } from './components/ProductLogo'
 import { HeroReveal } from './landing/components/HeroReveal'
-import { getAiAgents, simulateAiAgent, updateAiAgent, type AiAgent } from './services/ai_agents'
+import { getAiAgents, updateAiAgent, type AiAgent } from './services/ai_agents'
 import {
   AgentCard,
   AgentCardSkeleton,
@@ -16,21 +15,7 @@ import {
   NewReceptionistButton,
 } from './components/agents/AgentsBoard'
 import { DeleteAgentDialog } from './components/agents/DeleteAgentDialog'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from './components/ui/dialog'
-import { Textarea } from './components/ui/textarea'
-import {
-  getInstances,
-  getIntegrationStatus,
-  reconcileInstanceStatus,
-  type WhatsAppInstance,
-} from './services/whatsapp'
+import { getInstances, type WhatsAppInstance } from './services/whatsapp'
 import { toast } from 'sonner'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -61,7 +46,6 @@ import {
   Users,
   Workflow,
   X,
-  Zap,
 } from 'lucide-react'
 
 type ViewId =
@@ -81,14 +65,12 @@ type NavItem = { id: ViewId; label: string; icon: LucideIcon; badge?: string }
 
 const navigation: NavItem[] = [
   { id: 'dashboard', label: 'Visão geral', icon: LayoutDashboard },
-  { id: 'inbox', label: 'Conversas', icon: MessageCircle },
   { id: 'attention', label: 'Precisa de você', icon: BellRing, badge: '4' },
   { id: 'agents', label: 'Recepcionistas', icon: Bot },
   { id: 'knowledge', label: 'Conhecimento', icon: BookOpen },
   { id: 'journeys', label: 'Jornadas', icon: Workflow },
   { id: 'quality', label: 'Qualidade', icon: ShieldCheck },
   { id: 'analytics', label: 'Indicadores', icon: BarChart3 },
-  { id: 'integrations', label: 'Integrações', icon: Plug },
   { id: 'team', label: 'Equipe', icon: Users },
   { id: 'settings', label: 'Configurações', icon: Settings },
 ]
@@ -450,21 +432,11 @@ function DashboardApp() {
 
           <div className="p-4 sm:p-6 lg:p-8">
             {active === 'dashboard' && <Dashboard companyName={tenant.name} />}
-            {active === 'inbox' && (
-              <Inbox
-                organizationId={tenant.id}
-                onConnectionSetup={() => selectView('integrations')}
-              />
-            )}
             {active === 'attention' && <AttentionView />}
-            {active === 'agents' && <AgentsView />}
+            {active === 'agents' && <AgentsView organizationId={tenant.id} />}
             {active === 'knowledge' && <KnowledgeView />}
-            {active === 'integrations' ? (
-              <ConnectionSetup organizationId={tenant.id} />
-            ) : (
-              !['dashboard', 'inbox', 'attention', 'agents', 'knowledge'].includes(active) && (
-                <ModuleView id={active} />
-              )
+            {!['dashboard', 'attention', 'agents', 'knowledge'].includes(active) && (
+              <ModuleView id={active} />
             )}
           </div>
         </main>
@@ -781,37 +753,32 @@ function AttentionView() {
   )
 }
 
-function AgentsView() {
+function AgentsView({ organizationId }: { organizationId: string }) {
   const { user } = useAuth()
   const [agents, setAgents] = useState<AiAgent[]>([])
   const [instances, setInstances] = useState<WhatsAppInstance[]>([])
   const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState<AiAgent | null>(null)
+  const [workspaceAgent, setWorkspaceAgent] = useState<AiAgent | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<AiAgent | null>(null)
-  const [simulatorOpen, setSimulatorOpen] = useState(false)
-  const [simulationMessage, setSimulationMessage] = useState('')
-  const [simulationReply, setSimulationReply] = useState('')
-  const [simulationError, setSimulationError] = useState('')
-  const [simulating, setSimulating] = useState(false)
 
   const loadData = useCallback(async () => {
     if (!user) return
     try {
-      const [agentRows, instanceRows, integration] = await Promise.all([
+      const [agentRows, instanceRows] = await Promise.all([
         getAiAgents(),
-        getInstances(),
-        getIntegrationStatus().catch(() => null),
+        getInstances(organizationId),
       ])
       setAgents(agentRows)
-      setInstances(reconcileInstanceStatus(instanceRows, integration))
+      setInstances(instanceRows)
     } catch {
       toast.error('Não foi possível carregar as recepcionistas.')
     } finally {
       setLoading(false)
     }
-  }, [user])
+  }, [organizationId, user])
 
   useEffect(() => {
     void loadData()
@@ -820,9 +787,7 @@ function AgentsView() {
   useRealtime('ai_agents', () => void loadData(), !!user, user?.id || '')
   useRealtime('whatsapp_instances', () => void loadData(), !!user, user?.id || '')
 
-  const connectedInstance = instances.find((instance) => instance.status === 'connected')
-  const canCreate = !!connectedInstance && agents.length === 0
-  const simulatorAgent = agents[0]
+  const canCreate = !!user
 
   const openAgent = (agent: AiAgent | null) => {
     setSelectedAgent(agent)
@@ -853,37 +818,6 @@ function AgentsView() {
     setDeleteTarget(agent)
   }
 
-  const openSimulator = () => {
-    if (!simulatorAgent) return
-    setSimulationReply('')
-    setSimulationError('')
-    setSimulatorOpen(true)
-  }
-
-  const runSimulation = async () => {
-    const message = simulationMessage.trim()
-    if (!simulatorAgent || !message) {
-      toast.error('Digite uma mensagem para testar a recepcionista.')
-      return
-    }
-
-    setSimulating(true)
-    setSimulationReply('')
-    setSimulationError('')
-    try {
-      const result = await simulateAiAgent(simulatorAgent.id, message)
-      setSimulationReply(result.reply)
-    } catch (error) {
-      const responseMessage =
-        error && typeof error === 'object' && 'response' in error
-          ? (error as { response?: { message?: string } }).response?.message
-          : undefined
-      setSimulationError(responseMessage || 'Não foi possível concluir o teste da IA.')
-    } finally {
-      setSimulating(false)
-    }
-  }
-
   return (
     <div className="mx-auto max-w-[1600px] space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -893,17 +827,7 @@ function AgentsView() {
             Configure personalidade, conhecimento, regras e autonomia.
           </p>
         </div>
-        <NewReceptionistButton
-          disabled={!canCreate}
-          reason={
-            !connectedInstance
-              ? 'Conecte seu WhatsApp antes de criar a recepcionista.'
-              : agents.length > 0
-                ? 'Esta sessão já possui uma recepcionista configurada.'
-                : undefined
-          }
-          onClick={() => openAgent(null)}
-        />
+        <NewReceptionistButton disabled={!canCreate} onClick={() => openAgent(null)} />
       </div>
 
       {loading ? (
@@ -913,21 +837,18 @@ function AgentsView() {
           <AgentCardSkeleton />
         </div>
       ) : agents.length === 0 ? (
-        <AgentsEmptyState
-          canCreate={canCreate}
-          connected={!!connectedInstance}
-          onCreate={() => openAgent(null)}
-        />
+        <AgentsEmptyState canCreate={canCreate} onCreate={() => openAgent(null)} />
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {agents.map((agent, index) => (
             <AgentCard
               key={agent.id}
               agent={agent}
-              instance={connectedInstance}
+              instance={instances.find((instance) => instance.id === agent.instance_id)}
               featured={index === 0}
               toggling={togglingId === agent.id}
               onToggle={() => void toggleAgent(agent)}
+              onOpen={() => setWorkspaceAgent(agent)}
               onEdit={() => openAgent(agent)}
               onDelete={() => requestDeleteAgent(agent)}
             />
@@ -935,106 +856,26 @@ function AgentsView() {
         </div>
       )}
 
-      <section className="rounded-[28px] bg-[#0A0A0A] p-6 text-white sm:p-8 lg:flex lg:items-center lg:justify-between">
-        <div className="flex items-start gap-4">
-          <div className="rounded-full bg-[#25D366] p-3 text-[#0A0A0A]">
-            <Zap className="h-6 w-6" />
-          </div>
-          <div>
-            <h3 className="font-semibold tracking-[-0.01em]">Simulador antes da publicação</h3>
-            <p className="mt-1 max-w-2xl text-sm text-white/60">
-              Teste preços, reclamações, urgências, pedidos de atendimento humano e tentativas de
-              manipulação antes de colocar uma nova versão no ar.
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          disabled={!simulatorAgent}
-          onClick={openSimulator}
-          title={simulatorAgent ? undefined : 'Crie uma recepcionista antes de abrir o simulador.'}
-          className="mt-4 shrink-0 rounded-full bg-[#25D366] px-5 py-2.5 text-sm font-bold text-[#0A0A0A] transition hover:bg-[#20bd5b] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/55 lg:mt-0"
-        >
-          {simulatorAgent ? 'Abrir simulador' : 'Crie uma recepcionista primeiro'}
-        </button>
-      </section>
-
-      <Dialog open={simulatorOpen} onOpenChange={setSimulatorOpen}>
-        <DialogContent className="border-neutral-200 bg-white text-neutral-900 dark:border-white/10 dark:bg-[#141414] dark:text-white sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Simular atendimento</DialogTitle>
-            <DialogDescription>
-              Teste a recepcionista {simulatorAgent?.name || ''} sem enviar mensagens ao WhatsApp.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="simulation-message" className="text-sm font-medium">
-                Mensagem do cliente
-              </label>
-              <Textarea
-                id="simulation-message"
-                value={simulationMessage}
-                onChange={(event) => {
-                  setSimulationMessage(event.target.value)
-                  setSimulationError('')
-                }}
-                maxLength={4000}
-                placeholder="Ex.: Gostaria de saber o preço e como funciona o serviço."
-                className="min-h-32"
-              />
-              <p className="text-right text-xs text-neutral-500 dark:text-neutral-400">
-                {simulationMessage.length.toLocaleString('pt-BR')} / 4.000 caracteres
-              </p>
-            </div>
-
-            {simulationReply ? (
-              <div
-                aria-live="polite"
-                className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-400/20 dark:bg-emerald-400/10"
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700 dark:text-emerald-300">
-                  Resposta da recepcionista
-                </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{simulationReply}</p>
-              </div>
-            ) : null}
-
-            {simulationError ? (
-              <div
-                role="alert"
-                className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-700 dark:border-red-400/20 dark:bg-red-400/10 dark:text-red-300"
-              >
-                {simulationError}
-              </div>
-            ) : null}
-          </div>
-
-          <DialogFooter>
-            <button
-              type="button"
-              onClick={() => setSimulatorOpen(false)}
-              className="rounded-full border border-neutral-200 px-4 py-2 text-sm font-semibold dark:border-white/10"
-            >
-              Fechar
-            </button>
-            <button
-              type="button"
-              onClick={() => void runSimulation()}
-              disabled={simulating || !simulationMessage.trim()}
-              className="rounded-full bg-[#25D366] px-5 py-2 text-sm font-bold text-[#0A0A0A] transition hover:bg-[#20bd5b] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {simulating ? 'Testando...' : 'Testar recepcionista'}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AgentWorkspaceDialog
+        agent={workspaceAgent}
+        instance={instances.find((instance) => instance.id === workspaceAgent?.instance_id)}
+        organizationId={organizationId}
+        onOpenChange={(open) => {
+          if (!open) setWorkspaceAgent(null)
+        }}
+        onEdit={(agent) => {
+          setWorkspaceAgent(null)
+          openAgent(agent)
+        }}
+        onRefresh={loadData}
+      />
 
       <AgentFormSheet
         open={formOpen}
         onOpenChange={setFormOpen}
         agent={selectedAgent}
+        organizationId={organizationId}
+        usedInstanceIds={agents.map((agent) => agent.instance_id)}
         onSaved={loadData}
       />
 
