@@ -1,5 +1,7 @@
+import { useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { deleteAiAgent } from '@/services/ai_agents'
+import { deleteAiAgent, type AiAgent } from '@/services/ai_agents'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -10,29 +12,33 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Loader2 } from 'lucide-react'
-import type { AiAgent } from '@/services/ai_agents'
 
 interface DeleteAgentDialogProps {
   agent: AiAgent | null
-  loading?: boolean
   onClose: () => void
+  onDeleted: () => void | Promise<void>
 }
 
-export function DeleteAgentDialog({ agent, loading = false, onClose }: DeleteAgentDialogProps) {
+export function DeleteAgentDialog({ agent, onClose, onDeleted }: DeleteAgentDialogProps) {
+  const [deleting, setDeleting] = useState(false)
+
   const handleDelete = async () => {
-    if (!agent || loading) return
+    if (!agent || deleting) return
+    setDeleting(true)
     try {
       await deleteAiAgent(agent.id)
+      await onDeleted()
       toast.success(`Recepcionista "${agent.name}" excluída.`)
       onClose()
     } catch {
       toast.error('Não foi possível excluir a recepcionista.')
+    } finally {
+      setDeleting(false)
     }
   }
 
   return (
-    <AlertDialog open={!!agent} onOpenChange={(open) => !open && onClose()}>
+    <AlertDialog open={!!agent} onOpenChange={(open) => !open && !deleting && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Excluir recepcionista</AlertDialogTitle>
@@ -42,17 +48,17 @@ export function DeleteAgentDialog({ agent, loading = false, onClose }: DeleteAge
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={loading}>Cancelar</AlertDialogCancel>
+          <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
           <AlertDialogAction
             onClick={(event) => {
               event.preventDefault()
               void handleDelete()
             }}
-            disabled={loading}
+            disabled={deleting}
             className="bg-red-500 hover:bg-red-600"
           >
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            {loading ? 'Excluindo...' : 'Excluir'}
+            {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {deleting ? 'Excluindo...' : 'Excluir'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
