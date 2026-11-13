@@ -30,6 +30,19 @@ export type IntegrationStatus = {
   }
 }
 
+export const reconcileInstanceStatus = (
+  instances: WhatsAppInstance[],
+  integration: IntegrationStatus | null,
+) => {
+  const instanceId = integration?.instance.id
+  const remoteState = integration?.provider?.remoteState
+  if (!instanceId || remoteState !== 'open') return instances
+
+  return instances.map((instance) =>
+    instance.id === instanceId ? { ...instance, status: 'connected' } : instance,
+  )
+}
+
 const requireUserId = () => {
   const userId = pb.authStore.record?.id
   if (!userId) throw new Error('Entre na sua conta para acessar o WhatsApp.')

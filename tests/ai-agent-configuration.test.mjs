@@ -9,9 +9,19 @@ test('tela de recepcionistas usa registros reais e formulário persistente', asy
   const app = await readProjectFile('src/App.tsx')
 
   assert.match(app, /getAiAgents\(\)/)
+  assert.match(app, /getIntegrationStatus\(\)\.catch\(\(\) => null\)/)
+  assert.match(app, /reconcileInstanceStatus\(instanceRows, integration\)/)
   assert.match(app, /<AgentFormSheet/)
   assert.match(app, /updateAiAgent\(agent\.id, \{ active \}\)/)
   assert.doesNotMatch(app, /receptionistCards/)
+})
+
+test('estado remoto conectado libera a recepcionista sem alterar a instância no banco', async () => {
+  const service = await readProjectFile('src/services/whatsapp.ts')
+
+  assert.match(service, /remoteState !== 'open'/)
+  assert.match(service, /instance\.id === instanceId \? \{ \.\.\.instance, status: 'connected' \}/)
+  assert.doesNotMatch(service, /collection<WhatsAppInstance>\('whatsapp_instances'\)\.update/)
 })
 
 test('edição nunca reutiliza nem envia a chave já armazenada', async () => {

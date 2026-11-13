@@ -12,6 +12,10 @@ import pb from '@/lib/pocketbase/client'
  * Generic over the record type: pass your collection's interface as
  * `useRealtime<MyRecord>(...)` to get a typed subscription payload
  * instead of `unknown`.
+ *
+ * `scopeKey` (4th arg) narrows realtime events to the authenticated
+ * user's records: updates for records outside the scope are ignored,
+ * so one login never reacts to another user's WhatsApp instance.
  */
 export function useRealtime<TRecord extends RecordModel = RecordModel>(
   collectionName: string,
@@ -30,7 +34,20 @@ export function useRealtime<TRecord extends RecordModel = RecordModel>(
 
     pb.collection<TRecord>(collectionName)
       .subscribe('*', (e) => {
-        callbackRef.current(e)
+        if (!scopeKey) {
+          callbackRef.current(e)
+          return
+        }
+        const record = e.record as
+          | { id?: string; user_id?: string; organization_id?: string }
+          | undefined
+        const inScope =
+          record?.user_id === scopeKey ||
+          record?.organization_id === scopeKey ||
+          record?.id === scopeKey
+        if (inScope) {
+          callbackRef.current(e)
+        }
       })
       .then((fn) => {
         if (cancelled) {

@@ -9,7 +9,12 @@ import { Toaster } from './components/ui/toaster'
 import { ProductLogo } from './components/ProductLogo'
 import { HeroReveal } from './landing/components/HeroReveal'
 import { getAiAgents, updateAiAgent, type AiAgent } from './services/ai_agents'
-import { getInstances, type WhatsAppInstance } from './services/whatsapp'
+import {
+  getInstances,
+  getIntegrationStatus,
+  reconcileInstanceStatus,
+  type WhatsAppInstance,
+} from './services/whatsapp'
 import { toast } from 'sonner'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -772,9 +777,13 @@ function AgentsView() {
   const loadData = useCallback(async () => {
     if (!user) return
     try {
-      const [agentRows, instanceRows] = await Promise.all([getAiAgents(), getInstances()])
+      const [agentRows, instanceRows, integration] = await Promise.all([
+        getAiAgents(),
+        getInstances(),
+        getIntegrationStatus().catch(() => null),
+      ])
       setAgents(agentRows)
-      setInstances(instanceRows)
+      setInstances(reconcileInstanceStatus(instanceRows, integration))
     } catch {
       toast.error('Não foi possível carregar as recepcionistas.')
     } finally {
