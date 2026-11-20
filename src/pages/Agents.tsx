@@ -111,10 +111,6 @@ export default function Agents() {
                     <span className="shrink-0 inline-flex items-center rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-700 ring-1 ring-inset ring-zinc-200">
                       OpenAI
                     </span>
-                  ) : agent.provider === 'grok' ? (
-                    <span className="shrink-0 inline-flex items-center rounded-md bg-neutral-900 px-2 py-0.5 text-[11px] font-medium text-white ring-1 ring-inset ring-neutral-700">
-                      Grok
-                    </span>
                   ) : (
                     <span className="shrink-0 inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20">
                       Gemini

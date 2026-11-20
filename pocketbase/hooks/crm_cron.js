@@ -67,11 +67,9 @@ cronAdd('crm_status_updates', '*/1 * * * *', () => {
       const apiKey =
         provider === 'openai'
           ? $secrets.get('OPENAI_API_KEY') || ''
-          : provider === 'grok'
-            ? $secrets.get('GROK_API_KEY') || ''
-            : provider === 'gemini'
-              ? $secrets.get('GEMINI_API_KEY') || ''
-              : ''
+          : provider === 'gemini'
+            ? $secrets.get('GEMINI_API_KEY') || ''
+            : ''
 
       let newStatus = 'resolved'
 
@@ -83,18 +81,12 @@ Responda APENAS com a palavra "lost" se o cliente desistiu, parou de responder n
 Histórico:
 ${historyText}`
 
-        if (provider === 'openai' || provider === 'grok') {
+        if (provider === 'openai') {
           const res = $http.send({
-            url:
-              provider === 'openai'
-                ? 'https://api.openai.com/v1/responses'
-                : 'https://api.x.ai/v1/responses',
+            url: 'https://api.openai.com/v1/responses',
             method: 'POST',
             body: JSON.stringify({
-              model:
-                provider === 'openai'
-                  ? $secrets.get('OPENAI_MODEL') || 'gpt-6-luna'
-                  : $secrets.get('GROK_MODEL') || 'grok-4.7',
+              model: $secrets.get('OPENAI_MODEL') || 'gpt-6-luna',
               input: aiPrompt,
               max_output_tokens: 16,
               store: false,

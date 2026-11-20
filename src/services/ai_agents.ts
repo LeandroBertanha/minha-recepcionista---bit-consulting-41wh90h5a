@@ -81,7 +81,7 @@ export type AiAgent = {
   instance_id: string
   name: string
   description?: string
-  provider: 'openai' | 'gemini' | 'grok'
+  provider: 'openai' | 'gemini'
   system_prompt: string
   configuration?: ReceptionistConfiguration
   active: boolean
@@ -98,7 +98,7 @@ export type AiAgent = {
 
 export type AiSimulationResult = {
   reply: string
-  provider: 'openai' | 'gemini' | 'grok'
+  provider: 'openai' | 'gemini'
 }
 
 export const getAiAgents = () =>
