@@ -1,10 +1,26 @@
 import { useEffect, useState } from 'react'
-import { Bot, MessageCircle, Pencil, Plug, QrCode, Settings2, Sparkles } from 'lucide-react'
+import { Bot, LogOut, MessageCircle, Pencil, Plug, QrCode, Settings2, Sparkles } from 'lucide-react'
 import Inbox from '@/pages/Inbox'
 import { simulateAiAgent, type AiAgent } from '@/services/ai_agents'
 import { AgentConfigurationStudio } from '@/components/agents/AgentConfigurationStudio'
-import { fetchInstanceQR, getInstances, type WhatsAppInstance } from '@/services/whatsapp'
+import {
+  fetchInstanceQR,
+  getInstances,
+  logoutInstance,
+  type WhatsAppInstance,
+} from '@/services/whatsapp'
 import { Button } from '@/components/ui/button'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import {
   Dialog,
   DialogContent,
@@ -39,6 +55,7 @@ export function AgentWorkspaceDialog({
   const [simulating, setSimulating] = useState(false)
   const [qrCode, setQrCode] = useState('')
   const [connecting, setConnecting] = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
   const [connectionError, setConnectionError] = useState('')
   const [currentStatus, setCurrentStatus] = useState(instance?.status || 'pending')
 
@@ -68,13 +85,17 @@ export function AgentWorkspaceDialog({
         if (current.status === 'connected') {
           setQrCode('')
           await onRefresh()
+        } else if (current.status === 'connecting' && !qrCode) {
+          const result = await fetchInstanceQR(agent.instance_id)
+          setCurrentStatus(result.status)
+          setQrCode(result.qrcode || '')
         }
       } catch (_) {
         // A próxima atualização em tempo real ou o próximo ciclo refaz a consulta.
       }
     }, 5000)
     return () => window.clearInterval(timer)
-  }, [agent, currentStatus, onRefresh, organizationId])
+  }, [agent, currentStatus, onRefresh, organizationId, qrCode])
 
   if (!agent) return null
 
@@ -101,6 +122,7 @@ export function AgentWorkspaceDialog({
   const connectWhatsApp = async () => {
     setConnecting(true)
     setConnectionError('')
+    setQrCode('')
     try {
       const result = await fetchInstanceQR(agent.instance_id)
       setCurrentStatus(result.status)
@@ -114,6 +136,25 @@ export function AgentWorkspaceDialog({
       setConnectionError(responseMessage || 'Não foi possível conectar o WhatsApp.')
     } finally {
       setConnecting(false)
+    }
+  }
+
+  const disconnectWhatsApp = async () => {
+    setDisconnecting(true)
+    setConnectionError('')
+    try {
+      await logoutInstance(agent.instance_id)
+      setCurrentStatus('disconnected')
+      setQrCode('')
+      await onRefresh()
+    } catch (error) {
+      const responseMessage =
+        error && typeof error === 'object' && 'response' in error
+          ? (error as { response?: { message?: string } }).response?.message
+          : undefined
+      setConnectionError(responseMessage || 'Não foi possível desconectar o WhatsApp.')
+    } finally {
+      setDisconnecting(false)
     }
   }
 
@@ -237,7 +278,12 @@ export function AgentWorkspaceDialog({
                       {instance?.instance_name || 'Instância vinculada'}
                     </p>
                     <p className="mt-1 text-xs text-neutral-500">
-                      Status: {currentStatus === 'connected' ? 'conectado' : 'aguardando conexão'}
+                      Status:{' '}
+                      {currentStatus === 'connected'
+                        ? 'conectado'
+                        : currentStatus === 'connecting'
+                          ? 'aguardando leitura do QR Code'
+                          : 'desconectado'}
                     </p>
                   </div>
                   <span
@@ -247,7 +293,39 @@ export function AgentWorkspaceDialog({
                   />
                 </div>
               </div>
-              {currentStatus !== 'connected' ? (
+              {currentStatus === 'connected' ? (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={disconnecting}
+                      className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800 dark:border-red-400/30 dark:text-red-300 dark:hover:bg-red-400/10"
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      {disconnecting ? 'Desconectando...' : 'Desconectar WhatsApp'}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Desconectar o WhatsApp de {agent.name}?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Esta recepcionista deixará de receber mensagens. Para conectar novamente,
+                        será necessário escanear um novo QR Code no celular.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => void disconnectWhatsApp()}
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        Desconectar
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              ) : (
                 <Button
                   type="button"
                   disabled={connecting}
@@ -255,9 +333,13 @@ export function AgentWorkspaceDialog({
                   className="bg-[#25D366] font-bold text-[#0A0A0A] hover:bg-[#20bd5b]"
                 >
                   <QrCode className="mr-2 h-4 w-4" />
-                  {connecting ? 'Gerando QR Code...' : 'Gerar QR Code'}
+                  {connecting
+                    ? 'Gerando QR Code...'
+                    : currentStatus === 'disconnected'
+                      ? 'Conectar novamente'
+                      : 'Gerar QR Code'}
                 </Button>
-              ) : null}
+              )}
               {qrCode ? (
                 <div className="rounded-2xl border border-neutral-200 bg-white p-5 text-center dark:border-white/10">
                   <img

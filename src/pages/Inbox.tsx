@@ -587,7 +587,7 @@ export default function Inbox({
     if (!instance || instance.user_id !== userId || instance.organization_id !== organizationId)
       return
     try {
-      await logoutInstance()
+      await logoutInstance(instance.id)
       if (!mounted.current || currentScope.current !== scopeKey) return
       toast({ title: 'WhatsApp desconectado com sucesso' })
     } catch (_e) {

@@ -193,11 +193,16 @@ test('falha da Evolution gera correlação útil sem registrar conteúdo, telefo
 })
 
 
-function executeLogout({ ownInstance = true, membership = true } = {}) {
+function executeLogout({
+  ownInstance = true,
+  membership = true,
+  requestedInstanceId = 'richard-instance',
+} = {}) {
   const userId = 'richard'
   const foreign = record({ id: 'leandro-instance', user_id: 'leandro', organization_id: 'company-1', instance_name: 'session-leandro', status: 'connected' })
   const own = record({ id: 'richard-instance', user_id: userId, organization_id: 'company-1', instance_name: 'session-richard', status: 'connected' })
-  const candidates = [foreign, ...(ownInstance ? [own] : [])]
+  const ownSecond = record({ id: 'richard-instance-2', user_id: userId, organization_id: 'company-1', instance_name: 'session-richard-2', status: 'connected' })
+  const candidates = [foreign, ownSecond, ...(ownInstance ? [own] : [])]
   const calls = []
   const saves = []
   let route
@@ -211,13 +216,15 @@ function executeLogout({ ownInstance = true, membership = true } = {}) {
           if (!membership) throw new Error('Membership not found')
           return record({ role: 'admin', status: 'active', user_id: userId, organization_id: 'company-1' })
         }
-        assert.equal(collection, 'whatsapp_instances')
-        const selected = candidates.find((candidate) => matches(candidate, filter, params))
-        if (!selected) throw new Error('Instance not found')
-        return selected
+        throw new Error(`Unexpected collection: ${collection}`)
       },
       findFirstRecordByData: () => foreign,
       findRecordById(collection, id) {
+        if (collection === 'whatsapp_instances') {
+          const selected = candidates.find((candidate) => candidate.id === id)
+          if (!selected) throw new Error('Instance not found')
+          return selected
+        }
         assert.equal(collection, 'organizations')
         return record({ id, owner_id: 'leandro', status: 'active' })
       },
@@ -229,19 +236,19 @@ function executeLogout({ ownInstance = true, membership = true } = {}) {
   })
   const response = route({
     auth: { id: userId },
-    requestInfo: () => ({ body: {} }),
+    requestInfo: () => ({ body: { instance_id: requestedInstanceId } }),
     json: (status, body) => ({ status, body }),
     notFoundError: (message) => ({ status: 404, body: { message } }),
     forbiddenError: (message) => ({ status: 403, body: { message } }),
     unauthorizedError: (message) => ({ status: 401, body: { message } }),
   })
-  return { response, calls, saves, foreign, own }
+  return { response, calls, saves, foreign, own, ownSecond }
 }
 
 test('logout sem sessão própria não desconecta a primeira sessão conectada da empresa', () => {
   const result = executeLogout({ ownInstance: false })
 
-  assert.equal(result.response.status, 404)
+  assert.equal(result.response.status, 403)
   assert.equal(result.calls.length, 0)
   assert.equal(result.saves.length, 0)
   assert.equal(result.foreign.getString('status'), 'connected')
@@ -256,6 +263,26 @@ test('logout da própria sessão preserva a sessão conectada de Leandro', () =>
   assert.deepEqual(result.saves, ['richard-instance'])
   assert.equal(result.foreign.getString('status'), 'connected')
   assert.equal(result.own.getString('status'), 'disconnected')
+  assert.equal(result.ownSecond.getString('status'), 'connected')
+})
+
+test('logout desconecta somente a instância solicitada da recepcionista', () => {
+  const result = executeLogout({ requestedInstanceId: 'richard-instance-2' })
+
+  assert.equal(result.response.status, 200)
+  assert.equal(result.calls[0].url, `${apiUrl}/instance/logout/session-richard-2`)
+  assert.deepEqual(result.saves, ['richard-instance-2'])
+  assert.equal(result.own.getString('status'), 'connected')
+  assert.equal(result.ownSecond.getString('status'), 'disconnected')
+})
+
+test('logout não permite desconectar a instância de outro usuário', () => {
+  const result = executeLogout({ requestedInstanceId: 'leandro-instance' })
+
+  assert.equal(result.response.status, 403)
+  assert.equal(result.calls.length, 0)
+  assert.equal(result.saves.length, 0)
+  assert.equal(result.foreign.getString('status'), 'connected')
 })
 
 test('logout sem associação ativa não chama o provedor', () => {

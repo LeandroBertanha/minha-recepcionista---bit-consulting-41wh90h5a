@@ -223,7 +223,7 @@ export default function ConnectionSetup({ organizationId }: { organizationId: st
       return
     setActionLoading(true)
     try {
-      await logoutInstance()
+      await logoutInstance(instance.id)
       if (!mounted.current || currentScope.current !== scopeKey) return
       await loadInstance()
       toast({ title: 'Desconectado com sucesso' })

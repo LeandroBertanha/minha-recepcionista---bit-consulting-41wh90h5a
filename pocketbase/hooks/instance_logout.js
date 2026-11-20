@@ -6,28 +6,31 @@ routerAdd(
       return e.unauthorizedError('Unauthorized')
     }
 
+    const body = e.requestInfo().body || {}
+    const instanceId = typeof body.instance_id === 'string' ? body.instance_id.trim() : ''
+    if (!instanceId) {
+      return e.json(400, { message: 'Informe a instância do WhatsApp que será desconectada.' })
+    }
+
     let instance
     try {
+      instance = $app.findRecordById('whatsapp_instances', instanceId)
+      const organizationId = instance.getString('organization_id')
       const membership = $app.findFirstRecordByFilter(
         'organization_members',
-        'user_id = {:userId} && status = "active" && (role = "owner" || role = "admin")',
-        { userId: e.auth.id },
-      )
-      const organizationId = membership.getString('organization_id')
-      const organization = $app.findRecordById('organizations', organizationId)
-      if (organization.getString('status') !== 'active') return e.forbiddenError('Access denied')
-      instance = $app.findFirstRecordByFilter(
-        'whatsapp_instances',
-        'organization_id = {:organizationId} && user_id = {:userId}',
+        'organization_id = {:organizationId} && user_id = {:userId} && status = "active" && (role = "owner" || role = "admin")',
         { organizationId, userId: e.auth.id },
       )
+      const organization = $app.findRecordById('organizations', organizationId)
       if (
+        !membership ||
+        organization.getString('status') !== 'active' ||
         instance.getString('user_id') !== e.auth.id ||
         instance.getString('organization_id') !== organizationId
       )
         return e.forbiddenError('Access denied')
     } catch (err) {
-      return e.notFoundError('Instance not found')
+      return e.forbiddenError('Access denied')
     }
 
     const apiUrl = $secrets.get('EVOLUTION_API_URL')

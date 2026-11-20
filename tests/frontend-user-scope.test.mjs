@@ -89,6 +89,16 @@ test('contato ou instância ausente não dispara consulta sem escopo', () => {
   assert.equal(calls.length, 0)
 })
 
+test('logout informa explicitamente a instância da recepcionista', async () => {
+  const { service, calls } = fixture()
+
+  await service.logoutInstance('instance-richard')
+
+  assert.equal(calls[0].url, '/backend/v1/instance/logout')
+  assert.equal(calls[0].method, 'POST')
+  assert.equal(calls[0].body.instance_id, 'instance-richard')
+})
+
 test('eventos da mesma empresa mas de outro WhatsApp são descartados', () => {
   const { service } = fixture()
   assert.equal(

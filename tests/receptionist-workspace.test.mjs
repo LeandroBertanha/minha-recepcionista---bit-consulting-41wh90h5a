@@ -49,6 +49,10 @@ test('conversas e simulador pertencem ao espaço da recepcionista', async () => 
   assert.match(workspace, /TabsTrigger value="simulator"/)
   assert.match(workspace, /TabsTrigger value="whatsapp"/)
   assert.match(workspace, /instanceIdOverride=\{agent\.instance_id\}/)
+  assert.match(workspace, /logoutInstance\(agent\.instance_id\)/)
+  assert.match(workspace, /Desconectar WhatsApp/)
+  assert.match(workspace, /Conectar novamente/)
+  assert.match(workspace, /será necessário escanear um novo QR Code/)
   assert.match(inbox, /instanceIdOverride\?: string/)
 })
 

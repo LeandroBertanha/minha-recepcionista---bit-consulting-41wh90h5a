@@ -163,4 +163,11 @@ export const sendMessage = (
   })
 }
 
-export const logoutInstance = () => pb.send(`/backend/v1/instance/logout`, { method: 'POST' })
+export const logoutInstance = (instanceId: string) => {
+  requireUserId()
+  if (!instanceId) throw new Error('Selecione a conexão do WhatsApp que será desconectada.')
+  return pb.send(`/backend/v1/instance/logout`, {
+    method: 'POST',
+    body: { instance_id: instanceId },
+  })
+}
