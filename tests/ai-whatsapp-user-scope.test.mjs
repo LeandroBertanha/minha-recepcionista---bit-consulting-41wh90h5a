@@ -9,6 +9,7 @@ function record(values) {
   return {
     id: values.id,
     values,
+    get: (field) => values[field],
     getString: (field) => String(values[field] ?? ''),
     getBool: (field) => values[field] === true,
     set: (field, value) => { values[field] = value },
@@ -29,12 +30,14 @@ async function execute({
   contactInstance = 'richard-instance',
   contactOrganization = 'company-1',
   messageUser = 'richard',
+  messageBody = 'Pergunta de Richard',
+  agentConfiguration = {},
   openAiKey = 'server-fixture-key',
 } = {}) {
   const current = record({
     id: 'incoming-richard', direction: 'in', user_id: messageUser,
     organization_id: 'company-1', instance_id: 'richard-instance',
-    contact_id: 'richard-contact', body: 'Pergunta de Richard',
+    contact_id: 'richard-contact', body: messageBody,
   })
   const contact = record({ id: 'richard-contact', user_id: 'richard', organization_id: contactOrganization, instance_id: contactInstance, remote_jid: '5511999999999@s.whatsapp.net', agent_paused: false })
   const session = record({ id: 'richard-instance', user_id: 'richard', organization_id: 'company-1', instance_name: 'session-richard' })
@@ -42,7 +45,7 @@ async function execute({
   // da sessão de Leandro aparecem antes dos registros legítimos de propósito.
   const agents = [
     record({ id: 'foreign-agent', organization_id: 'company-1', instance_id: session.id, user_id: 'leandro', active: true, provider: 'openai', api_key: 'foreign-fixture-key', system_prompt: 'Fonte de outro login' }),
-    record({ id: 'own-agent', organization_id: 'company-1', instance_id: session.id, user_id: 'richard', active: true, provider: 'openai', api_key: 'own-fixture-key', system_prompt: 'Atenda Richard' }),
+    record({ id: 'own-agent', organization_id: 'company-1', instance_id: session.id, user_id: 'richard', active: true, provider: 'openai', api_key: 'own-fixture-key', system_prompt: 'Atenda Richard', configuration: agentConfiguration }),
   ]
   const messages = [
     record({ id: 'foreign-message', direction: 'in', user_id: 'leandro', organization_id: 'company-1', instance_id: 'leandro-instance', contact_id: current.getString('contact_id'), body: 'Histórico privado de outro login' }),
@@ -80,7 +83,7 @@ async function execute({
       },
       findCollectionByNameOrId: (name) => ({ name }),
       saveNoValidate(row) { saves.push({ ...row.values }) },
-      logger: () => ({ error() {} }),
+      logger: () => ({ error() {}, info() {} }),
     },
     $http: {
       send(request) {
@@ -156,6 +159,35 @@ test('IA não chama o provedor quando o segredo OpenAI não está configurado', 
   )
   assert.equal(result.calls.filter((call) => call.url.includes('/message/sendText/')).length, 0)
   assert.equal(result.saves.length, 0)
+  assert.equal(result.nextCount, 1)
+})
+
+test('transferência humana pausa a conversa e avisa a equipe sem chamar o provedor de IA', async () => {
+  const result = await execute({
+    messageBody: 'Quero falar com um atendente humano',
+    openAiKey: '',
+    agentConfiguration: {
+      handoff: {
+        intervention_number: '55 (11) 98888-7777',
+        keywords: ['atendente humano'],
+      },
+    },
+  })
+
+  assert.equal(
+    result.calls.filter((call) => call.url === 'https://api.openai.com/v1/responses').length,
+    0,
+  )
+  const notifications = result.calls.filter(
+    (call) => call.url === 'https://evolution.example.test/message/sendText/session-richard',
+  )
+  assert.equal(notifications.length, 1)
+  assert.deepEqual(JSON.parse(notifications[0].body), {
+    number: '5511988887777',
+    text: 'A recepcionista pausou uma conversa que precisa de atendimento humano. Acesse a plataforma Minha Recepcionista para assumir.',
+    delay: 0,
+  })
+  assert.ok(result.saves.some((row) => row.agent_paused === true && row.status === 'waiting'))
   assert.equal(result.nextCount, 1)
 })
 
