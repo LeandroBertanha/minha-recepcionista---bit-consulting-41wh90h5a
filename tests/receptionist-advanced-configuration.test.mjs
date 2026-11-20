@@ -18,7 +18,7 @@ test('configuração avançada pertence ao espaço de cada recepcionista', async
     'Como atende',
     'Quando chamar',
     'Agenda',
-    'Não responder',
+    'Contatos restritos',
     'Quanto cobrar',
     'Responder em grupos',
   ]) {
@@ -52,6 +52,7 @@ test('motor aplica configuração no WhatsApp e no simulador', async () => {
   assert.match(hook, /buildReceptionistContext\(configuration\)/)
   assert.match(hook, /loadKnowledgeContext\(agent\.id, organizationId, sessionUserId\)/)
   assert.match(hook, /remoteJid\.endsWith\('@g\.us'\)/)
+  assert.match(hook, /normalizeRestrictedContact/)
   assert.match(hook, /blockedNumbers\.includes\(remoteNumber\)/)
   assert.match(hook, /shouldHandoffImmediately\(currentBody, handoff\)/)
   assert.match(hook, /contact\.set\('agent_paused', true\)/)

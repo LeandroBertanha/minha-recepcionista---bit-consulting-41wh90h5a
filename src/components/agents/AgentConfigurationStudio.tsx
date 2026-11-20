@@ -30,6 +30,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { parseRestrictedContacts } from '@/lib/restricted-contacts'
 import { cn } from '@/lib/utils'
 
 const marketPresets = [
@@ -218,6 +219,7 @@ export function AgentConfigurationStudio({
   const [saving, setSaving] = useState(false)
   const [loadingSources, setLoadingSources] = useState(true)
   const [sourceBusy, setSourceBusy] = useState(false)
+  const [restrictedContactsInput, setRestrictedContactsInput] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -242,6 +244,29 @@ export function AgentConfigurationStudio({
 
   const update = (next: Partial<ReceptionistConfiguration>) =>
     setConfiguration((current) => ({ ...current, ...next }))
+
+  const addRestrictedContacts = () => {
+    const { valid, invalid } = parseRestrictedContacts(restrictedContactsInput)
+    if (!valid.length) {
+      toast.error('Informe ao menos um número válido com DDI e DDD.')
+      return
+    }
+
+    const current = new Set(configuration.blocked_numbers)
+    const added = valid.filter((number) => !current.has(number))
+    update({ blocked_numbers: [...current, ...added] })
+    setRestrictedContactsInput(invalid.join('\n'))
+
+    if (invalid.length) {
+      toast.warning(
+        `${added.length} contato(s) adicionado(s). ${invalid.length} número(s) inválido(s) ficaram no campo para correção.`,
+      )
+    } else if (!added.length) {
+      toast.info('Os contatos informados já estão na lista de restrição.')
+    } else {
+      toast.success(`${added.length} contato(s) adicionado(s) à restrição.`)
+    }
+  }
 
   const progress = useMemo(() => {
     const checks = [
@@ -395,7 +420,7 @@ export function AgentConfigurationStudio({
             Agenda
           </TabsTrigger>
           <TabsTrigger value="blocked" className="rounded-full">
-            Não responder
+            Contatos restritos ({configuration.blocked_numbers.length})
           </TabsTrigger>
           <TabsTrigger value="pricing" className="rounded-full">
             Quanto cobrar
@@ -411,7 +436,7 @@ export function AgentConfigurationStudio({
             ],
             [UserRoundCheck, 'Jeito de atender', behavior.tone || 'Pendente'],
             [CalendarDays, 'Agenda', configuration.scheduling.enabled ? 'Ativa' : 'Desativada'],
-            [ShieldBan, 'Não responder', `${configuration.blocked_numbers.length} número(s)`],
+            [ShieldBan, 'Contatos restritos', `${configuration.blocked_numbers.length} número(s)`],
             [
               WalletCards,
               'Política comercial',
@@ -743,32 +768,52 @@ export function AgentConfigurationStudio({
           className="mt-5 space-y-6 rounded-2xl border border-neutral-200 p-5 dark:border-white/10"
         >
           <div>
-            <h3 className="font-semibold">Com quem {agent.name} não conversa</h3>
+            <h3 className="font-semibold">Contatos restritos de {agent.name}</h3>
             <p className="mt-1 text-sm text-neutral-500">
-              Familiares, fornecedores e números internos recebem a mensagem normalmente, mas não
-              recebem resposta automática.
+              Estes contatos continuam aparecendo nas conversas, mas não recebem respostas
+              automáticas desta recepcionista.
             </p>
           </div>
-          <FieldBlock label="Número de WhatsApp" help="Use DDI e DDD. Ex.: 5511999998888.">
-            <AddListItem
-              inputMode="tel"
-              placeholder="5511999998888"
-              onAdd={(value) => {
-                const number = value.replace(/\D/g, '')
-                if (number.length < 10) return toast.error('Informe um número com DDD.')
-                update({
-                  blocked_numbers: [...new Set([...configuration.blocked_numbers, number])],
-                })
-              }}
+          <FieldBlock
+            label="Números de WhatsApp"
+            help="Adicione um ou vários números, separados por linha, vírgula ou ponto e vírgula. Use DDI e DDD; números brasileiros sem DDI recebem 55 automaticamente."
+          >
+            <Textarea
+              value={restrictedContactsInput}
+              onChange={(event) => setRestrictedContactsInput(event.target.value)}
+              className="min-h-28"
+              placeholder={'5511999998888\n5521988887777'}
             />
-            <RemovableChips
-              values={configuration.blocked_numbers}
-              onRemove={(value) =>
-                update({
-                  blocked_numbers: configuration.blocked_numbers.filter((item) => item !== value),
-                })
-              }
-            />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-neutral-500">
+                {configuration.blocked_numbers.length.toLocaleString('pt-BR')} contato(s)
+                restrito(s). A tela não define limite de quantidade.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!restrictedContactsInput.trim()}
+                onClick={addRestrictedContacts}
+              >
+                <Plus /> Adicionar contatos
+              </Button>
+            </div>
+            <div className="max-h-64 overflow-y-auto rounded-xl border border-neutral-200 p-3 dark:border-white/10">
+              {configuration.blocked_numbers.length ? (
+                <RemovableChips
+                  values={configuration.blocked_numbers}
+                  onRemove={(value) =>
+                    update({
+                      blocked_numbers: configuration.blocked_numbers.filter(
+                        (item) => item !== value,
+                      ),
+                    })
+                  }
+                />
+              ) : (
+                <p className="text-sm text-neutral-500">Nenhum contato restrito.</p>
+              )}
+            </div>
           </FieldBlock>
         </TabsContent>
 

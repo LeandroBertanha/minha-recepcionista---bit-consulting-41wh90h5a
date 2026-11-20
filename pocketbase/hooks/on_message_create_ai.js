@@ -13,6 +13,11 @@ onRecordAfterCreateSuccess(async (e) => {
   }
   const textList = (value) => (Array.isArray(value) ? value.filter(Boolean).join('; ') : '')
   const digitsOnly = (value) => String(value || '').replace(/\D/g, '')
+  const normalizeRestrictedContact = (value) => {
+    const digits = digitsOnly(value)
+    if (digits.length === 10 || digits.length === 11) return '55' + digits
+    return digits
+  }
   const clipped = (value, limit) =>
     String(value || '')
       .trim()
@@ -279,7 +284,7 @@ onRecordAfterCreateSuccess(async (e) => {
 
   const remoteNumber = digitsOnly(remoteJid.split('@')[0])
   const blockedNumbers = Array.isArray(configuration.blocked_numbers)
-    ? configuration.blocked_numbers.map(digitsOnly)
+    ? configuration.blocked_numbers.map(normalizeRestrictedContact).filter(Boolean)
     : []
   if (blockedNumbers.includes(remoteNumber)) return e.next()
 
