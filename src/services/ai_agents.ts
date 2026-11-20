@@ -1,4 +1,5 @@
 import pb from '@/lib/pocketbase/client'
+import { normalizeRestrictedContacts } from '@/lib/restricted-contacts'
 
 export type ReceptionistConfiguration = {
   respond_in_groups: boolean
@@ -71,7 +72,7 @@ export const normalizeReceptionistConfiguration = (
   handoff: { ...defaultReceptionistConfiguration.handoff, ...value?.handoff },
   scheduling: { ...defaultReceptionistConfiguration.scheduling, ...value?.scheduling },
   pricing: { ...defaultReceptionistConfiguration.pricing, ...value?.pricing },
-  blocked_numbers: value?.blocked_numbers || [],
+  blocked_numbers: normalizeRestrictedContacts(value?.blocked_numbers),
 })
 
 export type AiAgent = {
