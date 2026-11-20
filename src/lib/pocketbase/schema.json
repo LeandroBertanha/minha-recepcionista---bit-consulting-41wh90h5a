@@ -392,7 +392,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["gemini", "openai"]
+          "selectValues": ["gemini", "openai", "grok"]
         },
         {
           "name": "organization_id",

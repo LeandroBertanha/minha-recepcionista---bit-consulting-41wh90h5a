@@ -50,7 +50,7 @@ const formSchema = z.object({
   name: z.string().min(1, 'Nome é obrigatório'),
   description: z.string().optional(),
   instance_id: z.string().min(1, 'Conecte ou selecione um WhatsApp para esta recepcionista'),
-  provider: z.enum(['gemini', 'openai'], { error: 'Provedor é obrigatório' }),
+  provider: z.enum(['gemini', 'openai', 'grok'], { error: 'Provedor é obrigatório' }),
   system_prompt: z
     .string()
     .min(1, 'Prompt do sistema é obrigatório')
@@ -416,6 +416,7 @@ export function AgentFormSheet({
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="openai">OpenAI</SelectItem>
+                        <SelectItem value="grok">Grok (xAI)</SelectItem>
                         <SelectItem value="gemini">Gemini</SelectItem>
                       </SelectContent>
                     </Select>

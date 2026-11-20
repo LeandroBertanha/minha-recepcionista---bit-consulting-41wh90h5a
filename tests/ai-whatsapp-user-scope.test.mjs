@@ -32,7 +32,9 @@ async function execute({
   messageUser = 'richard',
   messageBody = 'Pergunta de Richard',
   agentConfiguration = {},
+  agentProvider = 'openai',
   openAiKey = 'server-fixture-key',
+  grokKey = 'grok-server-fixture-key',
 } = {}) {
   const current = record({
     id: 'incoming-richard', direction: 'in', user_id: messageUser,
@@ -45,7 +47,7 @@ async function execute({
   // da sessão de Leandro aparecem antes dos registros legítimos de propósito.
   const agents = [
     record({ id: 'foreign-agent', organization_id: 'company-1', instance_id: session.id, user_id: 'leandro', active: true, provider: 'openai', api_key: 'foreign-fixture-key', system_prompt: 'Fonte de outro login' }),
-    record({ id: 'own-agent', organization_id: 'company-1', instance_id: session.id, user_id: 'richard', active: true, provider: 'openai', api_key: 'own-fixture-key', system_prompt: 'Atenda Richard', configuration: agentConfiguration }),
+    record({ id: 'own-agent', organization_id: 'company-1', instance_id: session.id, user_id: 'richard', active: true, provider: agentProvider, api_key: 'own-fixture-key', system_prompt: 'Atenda Richard', configuration: agentConfiguration }),
   ]
   const messages = [
     record({ id: 'foreign-message', direction: 'in', user_id: 'leandro', organization_id: 'company-1', instance_id: 'leandro-instance', contact_id: current.getString('contact_id'), body: 'Histórico privado de outro login' }),
@@ -70,6 +72,8 @@ async function execute({
           EVOLUTION_API_ORIGIN: 'https://airecepcionista.com.br',
           OPENAI_API_KEY: openAiKey,
           OPENAI_MODEL: 'gpt-6-luna',
+          GROK_API_KEY: grokKey,
+          GROK_MODEL: 'grok-4.7',
         })[name],
     },
     $app: {
@@ -99,6 +103,19 @@ async function execute({
                 {
                   type: 'message',
                   content: [{ type: 'output_text', text: 'Resposta isolada' }],
+                },
+              ],
+            },
+          }
+        }
+        if (call.url === 'https://api.x.ai/v1/responses') {
+          return {
+            statusCode: 200,
+            json: {
+              output: [
+                {
+                  type: 'message',
+                  content: [{ type: 'output_text', text: 'Resposta Grok isolada' }],
                 },
               ],
             },
@@ -164,6 +181,23 @@ test('IA não chama o provedor quando o segredo OpenAI não está configurado', 
   assert.equal(result.nextCount, 1)
 })
 
+test('IA usa Grok com segredo exclusivo do servidor e Responses API', async () => {
+  const result = await execute({ agentProvider: 'grok' })
+  const completion = result.calls.find((call) => call.url === 'https://api.x.ai/v1/responses')
+
+  assert.ok(completion)
+  assert.equal(completion.headers.Authorization, 'Bearer grok-server-fixture-key')
+  const request = JSON.parse(completion.body)
+  assert.equal(request.model, 'grok-4.7')
+  assert.equal(request.store, false)
+  assert.doesNotMatch(completion.body, /grok-server-fixture-key|own-fixture-key/)
+  assert.equal(
+    result.calls.filter((call) => call.url === 'https://api.openai.com/v1/responses').length,
+    0,
+  )
+  assert.ok(result.saves.some((row) => row.body === 'Resposta Grok isolada'))
+})
+
 test('transferência humana pausa a conversa e avisa a equipe sem chamar o provedor de IA', async () => {
   const result = await execute({
     messageBody: 'Quero falar com um atendente humano',
@@ -186,7 +220,7 @@ test('transferência humana pausa a conversa e avisa a equipe sem chamar o prove
   assert.equal(notifications.length, 1)
   assert.deepEqual(JSON.parse(notifications[0].body), {
     number: '5511988887777',
-    text: 'A recepcionista pausou uma conversa que precisa de atendimento humano. Acesse a plataforma Minha Recepcionista para assumir.',
+    text: 'A recepcionista pausou uma conversa que precisa de atendimento humano. Acesse a plataforma AI Recepcionista para assumir.',
     delay: 0,
   })
   assert.ok(result.saves.some((row) => row.agent_paused === true && row.status === 'waiting'))

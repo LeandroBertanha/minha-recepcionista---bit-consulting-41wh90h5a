@@ -368,7 +368,7 @@ export default function DiagnosticDialog({ open, origin, planId, onOpenChange }:
             </span>
             <div className="min-w-0 flex-1">
               <DialogPrimitive.Title className="truncate text-[16px] font-semibold leading-tight">
-                Minha Recepcionista
+                AI Recepcionista
               </DialogPrimitive.Title>
               <p id="diagnostic-desc" className="truncate text-[13px] leading-tight text-white/80">
                 {phase === 'result'

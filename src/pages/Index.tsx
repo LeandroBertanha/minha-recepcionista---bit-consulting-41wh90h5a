@@ -45,7 +45,7 @@ export default function Index() {
               asChild
             >
               <Link to="/register">
-                Conheça a BitZaap <ArrowRight className="ml-2 h-5 w-5" />
+                Conheça a AI Recepcionista <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
             </Button>
             <Button
@@ -93,7 +93,7 @@ export default function Index() {
               <div className="flex-1 bg-gradient-to-br from-brand-50 to-white p-6 flex flex-col justify-end gap-4 relative">
                 <div className="absolute left-8 top-8 rounded-2xl border border-brand-100 bg-white/90 px-5 py-4 text-left shadow-sm backdrop-blur-sm">
                   <span className="font-machine block text-xs font-medium uppercase tracking-wider text-brand-600">
-                    BitZaap IA
+                    AI Recepcionista
                   </span>
                   <span className="mt-1 block text-sm font-semibold text-bit-navy">
                     Agente ativo e acompanhando

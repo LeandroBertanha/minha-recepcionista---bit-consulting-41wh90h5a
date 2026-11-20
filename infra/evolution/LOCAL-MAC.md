@@ -7,7 +7,7 @@ túnel HTTPS do ngrok. Ele não exige servidor em nuvem nem alteração no DNS d
 
 - Homologação e primeiros testes com um número de WhatsApp.
 - Operação inicial com baixo volume, enquanto o Mac puder permanecer ligado.
-- Validação completa da BitZaap antes da contratação de uma VPS.
+- Validação completa da AI Recepcionista antes da contratação de uma VPS.
 
 Não é indicado como hospedagem definitiva: se o Mac desligar, suspender ou perder internet, o
 WhatsApp ficará temporariamente indisponível.
@@ -58,12 +58,12 @@ O inspetor local do ngrok fica disponível em `http://127.0.0.1:4040`.
 
 ## Conexão com o Skip
 
-Configure no gerenciador de segredos da BitZaap:
+Configure no gerenciador de segredos da AI Recepcionista:
 
 - `EVOLUTION_API_URL`: `https://<NGROK_DOMAIN>`
 - `EVOLUTION_API_KEY`: o mesmo valor salvo no `.env`
 
-Depois, abra a tela de conexão da BitZaap e gere o QR Code.
+Depois, abra a tela de conexão da AI Recepcionista e gere o QR Code.
 
 ## Parada e reinicialização
 

@@ -55,6 +55,7 @@ test('formulário nunca solicita nem envia chave de provedor pelo navegador', as
 
   assert.doesNotMatch(form, /api_key|Chave da API|type="password"/)
   assert.match(form, /credencial do provedor é gerenciada com segurança no servidor/)
+  assert.match(form, /<SelectItem value="grok">Grok \(xAI\)<\/SelectItem>/)
   assert.match(form, /active: false/)
 })
 
@@ -124,7 +125,7 @@ test('migração oculta a chave da API sem alterar registros', async () => {
   assert.doesNotMatch(migration, /delete|truncate|findRecords|new Record/i)
 })
 
-test('hooks OpenAI usam Responses API sem registrar corpo ou URL sensível', async () => {
+test('hooks OpenAI e Grok usam Responses API sem registrar corpo ou URL sensível', async () => {
   const [messageHook, crmHook] = await Promise.all([
     readProjectFile('pocketbase/hooks/on_message_create_ai.js'),
     readProjectFile('pocketbase/hooks/crm_cron.js'),
@@ -132,18 +133,57 @@ test('hooks OpenAI usam Responses API sem registrar corpo ou URL sensível', asy
 
   for (const source of [messageHook, crmHook]) {
     assert.match(source, /https:\/\/api\.openai\.com\/v1\/responses/)
+    assert.match(source, /https:\/\/api\.x\.ai\/v1\/responses/)
     assert.match(source, /gpt-6-luna/)
+    assert.match(source, /grok-4\.7/)
     assert.match(source, /store: false/)
     assert.doesNotMatch(source, /chat\/completions|gpt-3\.5-turbo|gpt-4o-mini/)
     assert.doesNotMatch(source, /getString\('api_key'\)/)
   }
 
   assert.match(messageHook, /\$secrets\.get\('OPENAI_API_KEY'\)/)
+  assert.match(messageHook, /\$secrets\.get\('GROK_API_KEY'\)/)
   assert.match(crmHook, /\$secrets\.get\('OPENAI_API_KEY'\)/)
+  assert.match(crmHook, /\$secrets\.get\('GROK_API_KEY'\)/)
   assert.doesNotMatch(messageHook, /JSON\.stringify\(completionRes\.json/)
   assert.doesNotMatch(messageHook, /'url',\s*requestUrl/)
   assert.doesNotMatch(messageHook, /Falha na resposta da IA/)
   assert.doesNotMatch(crmHook, /e\.toString\(\)/)
+})
+
+test('migração adiciona Grok sem alterar registros existentes', async () => {
+  const migration = await readProjectFile('pocketbase/migrations/0020_add_grok_provider.js')
+  const values = ['gemini', 'openai']
+  let up
+  let down
+
+  vm.runInNewContext(migration, {
+    migrate(upFn, downFn) {
+      up = upFn
+      down = downFn
+    },
+  })
+
+  const provider = { values }
+  const saved = []
+  const app = {
+    findCollectionByNameOrId(name) {
+      assert.equal(name, 'ai_agents')
+      return { fields: { getByName: () => provider } }
+    },
+    save() {
+      saved.push([...provider.values])
+    },
+  }
+
+  up(app)
+  down(app)
+
+  assert.deepEqual(saved, [
+    ['gemini', 'openai', 'grok'],
+    ['gemini', 'openai'],
+  ])
+  assert.doesNotMatch(migration, /delete|truncate|findRecords|new Record|newQuery/i)
 })
 
 

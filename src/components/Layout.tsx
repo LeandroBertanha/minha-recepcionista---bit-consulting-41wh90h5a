@@ -61,7 +61,7 @@ export default function Layout() {
       <div className="flex min-h-screen flex-col bg-neutral-50">
         <header className="sticky top-0 z-50 w-full border-b border-neutral-200/80 bg-white/90 backdrop-blur-xl">
           <div className="mx-auto flex h-20 w-full max-w-[1400px] items-center justify-between px-4 sm:px-8">
-            <Link to="/" aria-label="BitZaap - página inicial">
+            <Link to="/" aria-label="AI Recepcionista - página inicial">
               <BrandLogo compact />
             </Link>
             <nav className="flex items-center gap-2 sm:gap-4">

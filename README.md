@@ -1,4 +1,4 @@
-# BitZaap
+# AI Recepcionista
 
 Plataforma da Bit Consulting para centralizar atendimentos, organizar oportunidades e automatizar conversas no WhatsApp com inteligência artificial.
 
@@ -147,7 +147,7 @@ incluídos no código ou enviados ao GitHub:
 - `EVOLUTION_API_KEY`: chave global utilizada pelo backend para administrar as instâncias.
 - `EVOLUTION_API_ORIGIN`: origem HTTPS autorizada pela Evolution API, normalmente
   `https://airecepcionista.com.br`.
-- `APP_WEBHOOK_URL`: URL pública do backend da BitZaap, sem barra no final.
+- `APP_WEBHOOK_URL`: URL pública do backend da AI Recepcionista, sem barra no final.
 - `EVOLUTION_WEBHOOK_SECRET`: valor aleatório usado no cabeçalho
   `X-Bitzaap-Webhook-Secret` para autenticar os webhooks.
 

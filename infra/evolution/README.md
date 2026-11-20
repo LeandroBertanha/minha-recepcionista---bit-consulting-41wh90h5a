@@ -1,4 +1,4 @@
-# Evolution API gratuita para a BitZaap
+# Evolution API gratuita para a AI Recepcionista
 
 Esta configuração executa a Evolution API, PostgreSQL, Redis e Caddy em uma única VM. Ela foi
 preparada para uma VM Oracle Cloud **Always Free** com Ubuntu e arquitetura ARM64.
@@ -69,12 +69,12 @@ curl --fail --show-error "https://evolution.seudominio.com.br"
 
 ## Conexão com o Skip
 
-No gerenciador de segredos da BitZaap, configure:
+No gerenciador de segredos da AI Recepcionista, configure:
 
 - `EVOLUTION_API_URL`: `https://evolution.seudominio.com.br`
 - `EVOLUTION_API_KEY`: o mesmo valor de `EVOLUTION_API_KEY` gravado no `.env` da VM
 
-Os segredos `APP_WEBHOOK_URL` e `EVOLUTION_WEBHOOK_SECRET` já pertencem ao backend BitZaap. A
+Os segredos `APP_WEBHOOK_URL` e `EVOLUTION_WEBHOOK_SECRET` já pertencem ao backend AI Recepcionista. A
 criação de cada instância registra automaticamente o webhook autenticado em
 `/backend/v1/webhook/evolution`.
 

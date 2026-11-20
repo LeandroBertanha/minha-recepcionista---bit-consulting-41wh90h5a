@@ -222,7 +222,13 @@ export function AgentCard({
             <Sparkles className="h-4 w-4" />
             Provedor
           </span>
-          <span className="font-semibold">{agent.provider === 'openai' ? 'OpenAI' : 'Gemini'}</span>
+          <span className="font-semibold">
+            {agent.provider === 'openai'
+              ? 'OpenAI'
+              : agent.provider === 'grok'
+                ? 'Grok (xAI)'
+                : 'Gemini'}
+          </span>
         </div>
         <div className="flex items-center justify-between gap-2">
           <span className="inline-flex items-center gap-2 text-neutral-500 dark:text-neutral-400">

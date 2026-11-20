@@ -122,7 +122,7 @@ routerAdd(
                 const content = (payload.conversation || payload.extendedTextMessage?.text || '')
                   .trim()
                   .toLowerCase()
-                return content === 'teste 2' || content.indexOf('teste minha recepcionista') !== -1
+                return content === 'teste 2' || content.indexOf('teste ai recepcionista') !== -1
               })
             }
           }

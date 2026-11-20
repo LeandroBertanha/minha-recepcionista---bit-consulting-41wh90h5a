@@ -48,7 +48,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      SERVER_NAME: BitZaap
+      SERVER_NAME: AI Recepcionista
       SERVER_TYPE: http
       SERVER_PORT: 8080
       SERVER_URL: https://${EVOLUTION_DOMAIN}
@@ -73,7 +73,7 @@ services:
       CACHE_LOCAL_ENABLED: 'false'
       AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
       AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: 'false'
-      CONFIG_SESSION_PHONE_CLIENT: BitZaap
+      CONFIG_SESSION_PHONE_CLIENT: AI Recepcionista
       CONFIG_SESSION_PHONE_NAME: Chrome
       QRCODE_LIMIT: 30
       LANGUAGE: pt-BR
