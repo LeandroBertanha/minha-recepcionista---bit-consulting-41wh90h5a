@@ -16,6 +16,19 @@ import {
 } from './components/agents/AgentsBoard'
 import { DeleteAgentDialog } from './components/agents/DeleteAgentDialog'
 import { getInstances, type WhatsAppInstance } from './services/whatsapp'
+import {
+  assumeAttentionContact,
+  getAttentionContacts,
+  type AttentionContact,
+} from './services/attention'
+import Inbox from './pages/Inbox'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from './components/ui/dialog'
 import { toast } from 'sonner'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -65,7 +78,7 @@ type NavItem = { id: ViewId; label: string; icon: LucideIcon; badge?: string }
 
 const navigation: NavItem[] = [
   { id: 'dashboard', label: 'Visão geral', icon: LayoutDashboard },
-  { id: 'attention', label: 'Precisa de você', icon: BellRing, badge: '4' },
+  { id: 'attention', label: 'Precisa de você', icon: BellRing },
   { id: 'agents', label: 'Recepcionistas', icon: Bot },
   { id: 'knowledge', label: 'Conhecimento', icon: BookOpen },
   { id: 'journeys', label: 'Jornadas', icon: Workflow },
@@ -88,40 +101,41 @@ const metrics = [
   { label: 'SLA cumprido', value: '96,8%', change: '+1,8%', icon: Clock3, tone: 'blue' },
 ]
 
-const attentionRows = [
-  {
-    client: 'Carlos Eduardo',
-    reason: 'Solicitou atendimento humano',
-    wait: '06:42',
-    sla: '3 min',
-    priority: 'Alta',
-    agent: 'Lia',
-  },
-  {
-    client: 'Beatriz Nunes',
-    reason: 'Cliente demonstra frustração',
-    wait: '04:18',
-    sla: '6 min',
-    priority: 'Alta',
-    agent: 'Lia',
-  },
-  {
-    client: 'Fernando Alves',
-    reason: 'Desconto fora da autonomia',
-    wait: '02:51',
-    sla: '9 min',
-    priority: 'Média',
-    agent: 'Maya',
-  },
-  {
-    client: 'Camila Rocha',
-    reason: 'Informação não cadastrada',
-    wait: '01:36',
-    sla: '11 min',
-    priority: 'Normal',
-    agent: 'Lia',
-  },
-]
+type AttentionRow = {
+  contactId: string
+  instanceId: string
+  client: string
+  reason: string
+  wait: string
+  sla: string
+  priority: 'Alta' | 'Média' | 'Normal'
+  agent: string
+}
+
+const buildAttentionRows = (contacts: AttentionContact[], agents: AiAgent[]): AttentionRow[] =>
+  contacts.map((contact) => {
+    const waitingSince = new Date(
+      contact.last_message_at || contact.updated || contact.created,
+    ).getTime()
+    const elapsedMinutes = Number.isFinite(waitingSince)
+      ? Math.max(0, Math.floor((Date.now() - waitingSince) / 60000))
+      : 0
+    const elapsedHours = Math.floor(elapsedMinutes / 60)
+    const remainingMinutes = Math.max(0, 10 - elapsedMinutes)
+    const priority = elapsedMinutes >= 7 ? 'Alta' : elapsedMinutes >= 4 ? 'Média' : 'Normal'
+    const agent = agents.find((item) => item.instance_id === contact.instance_id)
+
+    return {
+      contactId: contact.id,
+      instanceId: contact.instance_id,
+      client: contact.name || contact.phone || contact.remote_jid.split('@')[0],
+      reason: contact.last_message || 'Atendimento humano solicitado',
+      wait: `${String(elapsedHours).padStart(2, '0')}:${String(elapsedMinutes % 60).padStart(2, '0')}`,
+      sla: remainingMinutes > 0 ? `${remainingMinutes} min` : 'Vencido',
+      priority,
+      agent: agent?.name || 'Recepcionista',
+    }
+  })
 
 const knowledgeRows = [
   {
@@ -197,6 +211,10 @@ function DashboardApp() {
   const [tenant, setTenant] = useState<{ id: string; name: string; role: string } | null>(null)
   const [tenantLoading, setTenantLoading] = useState(true)
   const [tenantError, setTenantError] = useState('')
+  const [attentionRows, setAttentionRows] = useState<AttentionRow[]>([])
+  const [attentionLoading, setAttentionLoading] = useState(true)
+  const [attentionAssumingId, setAttentionAssumingId] = useState<string | null>(null)
+  const [attentionConversation, setAttentionConversation] = useState<AttentionRow | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -237,6 +255,45 @@ function DashboardApp() {
       mounted = false
     }
   }, [user?.id])
+
+  const loadAttention = useCallback(async () => {
+    if (!tenant?.id || !user?.id) return
+    try {
+      const [contacts, agents] = await Promise.all([getAttentionContacts(tenant.id), getAiAgents()])
+      setAttentionRows(buildAttentionRows(contacts, agents))
+    } catch (_error) {
+      toast.error('Não foi possível atualizar a fila Precisa de você.')
+    } finally {
+      setAttentionLoading(false)
+    }
+  }, [tenant?.id, user?.id])
+
+  useEffect(() => {
+    if (!tenant?.id || !user?.id) return
+    setAttentionLoading(true)
+    void loadAttention()
+  }, [loadAttention, tenant?.id, user?.id])
+
+  useRealtime(
+    'whatsapp_contacts',
+    () => void loadAttention(),
+    !!tenant?.id && !!user?.id,
+    `${user?.id || ''}:${tenant?.id || ''}:attention`,
+  )
+
+  const assumeConversation = async (row: AttentionRow) => {
+    setAttentionAssumingId(row.contactId)
+    try {
+      await assumeAttentionContact(row.contactId)
+      setAttentionRows((current) => current.filter((item) => item.contactId !== row.contactId))
+      setAttentionConversation(row)
+      toast.success('Conversa assumida. A IA continuará pausada para este contato.')
+    } catch (_error) {
+      toast.error('Não foi possível assumir esta conversa.')
+    } finally {
+      setAttentionAssumingId(null)
+    }
+  }
 
   useEffect(() => {
     const stored = window.localStorage.getItem('minha-recepcionista-theme')
@@ -338,6 +395,12 @@ function DashboardApp() {
             {navigation.map((item) => {
               const Icon = item.icon
               const selected = active === item.id
+              const badge =
+                item.id === 'attention'
+                  ? attentionRows.length > 0
+                    ? String(attentionRows.length)
+                    : undefined
+                  : item.badge
               return (
                 <button
                   key={item.id}
@@ -351,7 +414,7 @@ function DashboardApp() {
                 >
                   <Icon className="h-[18px] w-[18px]" />
                   <span className="flex-1 text-left">{item.label}</span>
-                  {item.badge && (
+                  {badge && (
                     <span
                       className={
                         'rounded-full px-2 py-0.5 text-[10px] ' +
@@ -362,7 +425,7 @@ function DashboardApp() {
                             : 'bg-white/10 text-white/70')
                       }
                     >
-                      {item.badge}
+                      {badge}
                     </span>
                   )}
                 </button>
@@ -431,8 +494,24 @@ function DashboardApp() {
           </header>
 
           <div className="p-4 sm:p-6 lg:p-8">
-            {active === 'dashboard' && <Dashboard companyName={tenant.name} />}
-            {active === 'attention' && <AttentionView />}
+            {active === 'dashboard' && (
+              <Dashboard
+                companyName={tenant.name}
+                attentionRows={attentionRows}
+                attentionLoading={attentionLoading}
+                attentionAssumingId={attentionAssumingId}
+                onAssume={assumeConversation}
+                onShowAttention={() => setActive('attention')}
+              />
+            )}
+            {active === 'attention' && (
+              <AttentionView
+                rows={attentionRows}
+                loading={attentionLoading}
+                assumingId={attentionAssumingId}
+                onAssume={assumeConversation}
+              />
+            )}
             {active === 'agents' && <AgentsView organizationId={tenant.id} />}
             {active === 'knowledge' && <KnowledgeView />}
             {!['dashboard', 'attention', 'agents', 'knowledge'].includes(active) && (
@@ -440,12 +519,56 @@ function DashboardApp() {
             )}
           </div>
         </main>
+
+        <Dialog
+          open={!!attentionConversation}
+          onOpenChange={(open) => {
+            if (!open) setAttentionConversation(null)
+          }}
+        >
+          <DialogContent className="flex h-[92vh] w-[96vw] max-w-[1500px] flex-col overflow-hidden border-neutral-200 bg-white p-0 text-neutral-900 dark:border-white/10 dark:bg-[#141414] dark:text-white sm:max-w-[1500px]">
+            <DialogHeader className="border-b border-neutral-200 px-6 pb-4 pt-6 pr-14 dark:border-white/10">
+              <DialogTitle>Atendimento de {attentionConversation?.client}</DialogTitle>
+              <DialogDescription>
+                A IA está pausada. Responda pelo Inbox ou devolva a conversa para a recepcionista.
+              </DialogDescription>
+            </DialogHeader>
+            {attentionConversation ? (
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <Inbox
+                  organizationId={tenant.id}
+                  instanceIdOverride={attentionConversation.instanceId}
+                  initialContactId={attentionConversation.contactId}
+                  embedded
+                  onConnectionSetup={() => {
+                    setAttentionConversation(null)
+                    setActive('agents')
+                  }}
+                />
+              </div>
+            ) : null}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )
 }
 
-function Dashboard({ companyName }: { companyName: string }) {
+function Dashboard({
+  companyName,
+  attentionRows,
+  attentionLoading,
+  attentionAssumingId,
+  onAssume,
+  onShowAttention,
+}: {
+  companyName: string
+  attentionRows: AttentionRow[]
+  attentionLoading: boolean
+  attentionAssumingId: string | null
+  onAssume: (row: AttentionRow) => Promise<void>
+  onShowAttention: () => void
+}) {
   const { user } = useAuth()
   const firstName = (user?.name || user?.email || 'usuário').split(' ')[0]
 
@@ -590,7 +713,13 @@ function Dashboard({ companyName }: { companyName: string }) {
                 Conversas aguardando ação humana
               </p>
             </div>
-            <button className="text-sm font-bold text-[#128C7E]">Ver fila completa</button>
+            <button
+              type="button"
+              onClick={onShowAttention}
+              className="text-sm font-bold text-[#128C7E]"
+            >
+              Ver fila completa
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[620px] text-left text-sm">
@@ -606,7 +735,7 @@ function Dashboard({ companyName }: { companyName: string }) {
               <tbody>
                 {attentionRows.slice(0, 3).map((row) => (
                   <tr
-                    key={row.client}
+                    key={row.contactId}
                     className="border-t border-neutral-100 dark:border-white/[0.07]"
                   >
                     <td className="px-5 py-4 font-semibold">{row.client}</td>
@@ -620,12 +749,31 @@ function Dashboard({ companyName }: { companyName: string }) {
                       </StatusPill>
                     </td>
                     <td className="px-5 py-4 text-right">
-                      <button className="rounded-full bg-[#25D366] px-3 py-2 text-xs font-bold text-[#0A0A0A]">
-                        Assumir
+                      <button
+                        type="button"
+                        disabled={attentionAssumingId === row.contactId}
+                        onClick={() => void onAssume(row)}
+                        className="rounded-full bg-[#25D366] px-3 py-2 text-xs font-bold text-[#0A0A0A] disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {attentionAssumingId === row.contactId ? 'Assumindo...' : 'Assumir'}
                       </button>
                     </td>
                   </tr>
                 ))}
+                {!attentionLoading && attentionRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-5 py-8 text-center text-neutral-500">
+                      Nenhuma conversa aguarda atendimento humano.
+                    </td>
+                  </tr>
+                ) : null}
+                {attentionLoading ? (
+                  <tr>
+                    <td colSpan={5} className="px-5 py-8 text-center text-neutral-500">
+                      Atualizando fila...
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>
@@ -662,7 +810,19 @@ function Dashboard({ companyName }: { companyName: string }) {
   )
 }
 
-function AttentionView() {
+function AttentionView({
+  rows,
+  loading,
+  assumingId,
+  onAssume,
+}: {
+  rows: AttentionRow[]
+  loading: boolean
+  assumingId: string | null
+  onAssume: (row: AttentionRow) => Promise<void>
+}) {
+  const urgentCount = rows.filter((row) => row.priority === 'Alta').length
+
   return (
     <div className="mx-auto max-w-[1600px] space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -673,11 +833,11 @@ function AttentionView() {
           </p>
         </div>
         <div className="flex gap-2">
-          <StatusPill tone="danger">2 próximas do SLA</StatusPill>
-          <button className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold dark:border-white/10 dark:bg-white/[0.04]">
-            <Filter className="mr-2 inline h-4 w-4" />
-            Filtros
-          </button>
+          <StatusPill tone={urgentCount > 0 ? 'danger' : 'success'}>
+            {urgentCount > 0
+              ? `${urgentCount} ${urgentCount === 1 ? 'urgente' : 'urgentes'}`
+              : `${rows.length} aguardando`}
+          </StatusPill>
         </div>
       </div>
       <div className="overflow-hidden rounded-[24px] border border-neutral-200/80 bg-white shadow-sm dark:border-white/10 dark:bg-[#141414]">
@@ -695,9 +855,9 @@ function AttentionView() {
               </tr>
             </thead>
             <tbody>
-              {attentionRows.map((row) => (
+              {rows.map((row) => (
                 <tr
-                  key={row.client}
+                  key={row.contactId}
                   className="border-t border-neutral-100 dark:border-white/[0.07]"
                 >
                   <td className="px-6 py-5 font-bold">{row.client}</td>
@@ -714,7 +874,7 @@ function AttentionView() {
                   <td className="px-4 py-5">
                     <span
                       className={
-                        row.sla === '3 min'
+                        row.sla === 'Vencido'
                           ? 'font-bold text-rose-600'
                           : 'font-semibold text-neutral-600 dark:text-neutral-300'
                       }
@@ -736,15 +896,31 @@ function AttentionView() {
                     </StatusPill>
                   </td>
                   <td className="px-6 py-5 text-right">
-                    <button className="mr-2 rounded-full border border-neutral-200 px-3 py-2 text-xs font-bold dark:border-white/10">
-                      Delegar
-                    </button>
-                    <button className="rounded-full bg-[#25D366] px-3 py-2 text-xs font-bold text-[#0A0A0A]">
-                      Assumir
+                    <button
+                      type="button"
+                      disabled={assumingId === row.contactId}
+                      onClick={() => void onAssume(row)}
+                      className="rounded-full bg-[#25D366] px-3 py-2 text-xs font-bold text-[#0A0A0A] disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {assumingId === row.contactId ? 'Assumindo...' : 'Assumir'}
                     </button>
                   </td>
                 </tr>
               ))}
+              {!loading && rows.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center text-neutral-500">
+                    Nenhuma conversa aguarda intervenção humana.
+                  </td>
+                </tr>
+              ) : null}
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center text-neutral-500">
+                    Atualizando fila...
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>

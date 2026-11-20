@@ -31,13 +31,15 @@ async function execute({
   contactOrganization = 'company-1',
   messageUser = 'richard',
   messageBody = 'Pergunta de Richard',
+  messageType = 'text',
   agentConfiguration = {},
   openAiKey = 'server-fixture-key',
+  speechResponse = { statusCode: 200, body: new Uint8Array([1, 2, 3, 4]) },
 } = {}) {
   const current = record({
     id: 'incoming-richard', direction: 'in', user_id: messageUser,
     organization_id: 'company-1', instance_id: 'richard-instance',
-    contact_id: 'richard-contact', body: messageBody,
+    contact_id: 'richard-contact', body: messageBody, type: messageType,
   })
   const contact = record({ id: 'richard-contact', user_id: 'richard', organization_id: contactOrganization, instance_id: contactInstance, remote_jid: '5511999999999@s.whatsapp.net', agent_paused: false })
   const session = record({ id: 'richard-instance', user_id: 'richard', organization_id: 'company-1', instance_name: 'session-richard' })
@@ -61,6 +63,9 @@ async function execute({
     routerAdd() {},
     $apis: { requireAuth: () => 'auth-middleware' },
     Record: class { constructor() { return record({ id: 'new-ai-message' }) } },
+    $filesystem: {
+      fileFromBytes: (bytes, name) => ({ name, size: bytes.length }),
+    },
     $security: { randomString: () => 'fixture-id' },
     $secrets: {
       get: (name) =>
@@ -84,7 +89,7 @@ async function execute({
       },
       findCollectionByNameOrId: (name) => ({ name }),
       saveNoValidate(row) { saves.push({ ...row.values }) },
-      logger: () => ({ error() {}, info() {} }),
+      logger: () => ({ error() {}, info() {}, warn() {} }),
     },
     $http: {
       send(request) {
@@ -103,6 +108,15 @@ async function execute({
               ],
             },
           }
+        }
+        if (call.url === 'https://api.openai.com/v1/audio/speech') {
+          return speechResponse
+        }
+        if (
+          call.url ===
+          'https://evolution.example.test/message/sendWhatsAppAudio/session-richard'
+        ) {
+          return { statusCode: 201, json: { key: { id: 'ai-audio-provider-id' } } }
         }
         if (call.url === 'https://evolution.example.test/message/sendText/session-richard') return { statusCode: 201, json: { key: { id: 'ai-provider-id' } } }
         throw new Error('Chamada externa inesperada')
@@ -150,6 +164,44 @@ test('IA usa somente o agente, histórico e instância do login que recebeu a me
   assert.equal(response.instance_id, 'richard-instance')
   assert.equal(response.organization_id, 'company-1')
   assert.equal(response.contact_id, 'richard-contact')
+})
+
+test('IA responde com áudio quando a mensagem recebida foi transcrita de um áudio', async () => {
+  const result = await execute({
+    messageBody: 'Gostaria de saber o valor do serviço',
+    messageType: 'audio',
+  })
+
+  const speech = result.calls.find(
+    (call) => call.url === 'https://api.openai.com/v1/audio/speech',
+  )
+  assert.ok(speech)
+  assert.equal(JSON.parse(speech.body).response_format, 'opus')
+
+  const send = result.calls.find((call) => call.url.includes('/message/sendWhatsAppAudio/'))
+  assert.ok(send)
+  assert.equal(send.url, 'https://evolution.example.test/message/sendWhatsAppAudio/session-richard')
+  assert.equal(JSON.parse(send.body).audio, 'AQIDBA==')
+  assert.equal(result.calls.filter((call) => call.url.includes('/message/sendText/')).length, 0)
+
+  const response = result.saves.find((row) => row.message_id === 'ai-audio-provider-id')
+  assert.equal(response.type, 'audio')
+  assert.equal(response.mime_type, 'audio/ogg')
+  assert.deepEqual(response.media_file, { name: 'resposta-ia.opus', size: 4 })
+})
+
+test('falha na síntese de voz envia a resposta em texto sem perder o atendimento', async () => {
+  const result = await execute({
+    messageBody: 'Preciso de ajuda',
+    messageType: 'audio',
+    speechResponse: { statusCode: 503, body: new Uint8Array(0) },
+  })
+
+  assert.equal(result.calls.filter((call) => call.url.includes('/message/sendWhatsAppAudio/')).length, 0)
+  assert.equal(result.calls.filter((call) => call.url.includes('/message/sendText/')).length, 1)
+  const response = result.saves.find((row) => row.message_id === 'ai-provider-id')
+  assert.equal(response.type, 'text')
+  assert.equal(response.body, 'Resposta isolada')
 })
 
 test('IA não chama o provedor quando o segredo OpenAI não está configurado', async () => {

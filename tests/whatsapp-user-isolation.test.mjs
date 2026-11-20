@@ -305,11 +305,26 @@ function webhookHarness() {
   const collections = { whatsapp_instances: instances, whatsapp_contacts: contacts, whatsapp_messages: messages }
   let route
   let sequence = 0
+  class TestFormData {
+    constructor() { this.values = [] }
+    append(name, value) { this.values.push([name, value]) }
+  }
   vm.runInNewContext(webhookSource, {
     routerAdd: (_method, _path, handler) => { route = handler },
     console: { info() {}, error() {} },
     Record: class { constructor(collection) { return record({ id: `new-${++sequence}`, collection: collection.name }) } },
-    $secrets: { get: (name) => ({ EVOLUTION_WEBHOOK_SECRET: secret, EVOLUTION_API_URL: apiUrl, EVOLUTION_API_KEY: apiKey })[name] },
+    FormData: TestFormData,
+    Uint8Array,
+    $filesystem: {
+      fileFromBytes: (bytes, name) => ({ name, size: bytes.length }),
+    },
+    $secrets: { get: (name) => ({
+      EVOLUTION_WEBHOOK_SECRET: secret,
+      EVOLUTION_API_URL: apiUrl,
+      EVOLUTION_API_KEY: apiKey,
+      OPENAI_API_KEY: 'server-openai-key',
+      OPENAI_TRANSCRIPTION_MODEL: 'gpt-transcribe',
+    })[name] },
     $app: {
       findFirstRecordByData(collection, field, value) {
         const selected = collections[collection]?.find((row) => row.getString(field) === String(value))
@@ -332,7 +347,18 @@ function webhookHarness() {
       },
       logger: () => ({ error() {}, warn() {} }),
     },
-    $http: { send(request) { httpCalls.push(request); throw new Error('Nenhum HTTP é necessário para texto') } },
+    $http: {
+      send(request) {
+        httpCalls.push(request)
+        if (request.url.includes('/chat/getBase64FromMediaMessage/')) {
+          return { statusCode: 200, json: { base64: 'AQIDBA==' } }
+        }
+        if (request.url === 'https://api.openai.com/v1/audio/transcriptions') {
+          return { statusCode: 200, json: { text: 'Áudio transcrito com sucesso' } }
+        }
+        throw new Error('Chamada HTTP inesperada')
+      },
+    },
   })
   const emit = (instance, { event = 'messages.upsert', messageId = 'same-upstream-id', text = 'Teste isolado', data, header = secret } = {}) => route({
     request: { header: { get: () => header } },
@@ -388,6 +414,34 @@ test('evento de conexão de Richard não altera o status da instância de Leandr
   assert.equal(h.instances[1].getString('status'), 'disconnected')
   assert.equal(h.contacts.length, 0)
   assert.equal(h.messages.length, 0)
+})
+
+test('webhook baixa, transcreve e protege o áudio antes de acionar a IA', () => {
+  const h = webhookHarness()
+  const response = h.emit('session-richard', {
+    messageId: 'audio-upstream-id',
+    data: {
+      key: {
+        id: 'audio-upstream-id',
+        remoteJid: '5511999999999@s.whatsapp.net',
+        fromMe: false,
+      },
+      pushName: 'Contato de áudio',
+      message: { audioMessage: { mimetype: 'audio/ogg; codecs=opus' } },
+    },
+  })
+
+  assert.equal(response.status, 200)
+  assert.equal(h.httpCalls.length, 2)
+  assert.match(h.httpCalls[0].url, /getBase64FromMediaMessage\/session-richard/)
+  assert.equal(h.httpCalls[1].url, 'https://api.openai.com/v1/audio/transcriptions')
+  assert.equal(h.httpCalls[1].headers.Authorization, 'Bearer server-openai-key')
+  assert.ok(Array.isArray(h.httpCalls[1].body.values))
+
+  const message = h.messages.find((row) => row.getString('message_id') === 'audio-upstream-id')
+  assert.equal(message.getString('type'), 'audio')
+  assert.equal(message.getString('body'), 'Áudio transcrito com sucesso')
+  assert.deepEqual(message.values.media_file, { name: 'audio.ogg', size: 4 })
 })
 
 test('webhook não autenticado não cria contato, mensagem nem altera conexão', () => {
