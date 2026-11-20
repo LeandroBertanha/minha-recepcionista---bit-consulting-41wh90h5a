@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-11-13T21:04:14.581Z",
+  "generatedAt": "2026-11-20T15:09:10.613Z",
   "collections": [
     {
       "name": "users",
@@ -447,6 +447,12 @@
           "required": true,
           "system": false,
           "collectionRef": "organizations"
+        },
+        {
+          "name": "configuration",
+          "type": "json",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -583,6 +589,107 @@
         }
       ],
       "indexes": []
+    },
+    {
+      "name": "agent_knowledge_sources",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && organization_id.status = 'active' && @collection.organization_members:knowledge_member.organization_id ?= organization_id && @collection.organization_members:knowledge_member.user_id ?= @request.auth.id && @collection.organization_members:knowledge_member.status ?= 'active' && user_id = @request.auth.id && agent_id.user_id = @request.auth.id && agent_id.organization_id = organization_id && agent_id.instance_id.organization_id = organization_id",
+        "view": "@request.auth.id != '' && organization_id.status = 'active' && @collection.organization_members:knowledge_member.organization_id ?= organization_id && @collection.organization_members:knowledge_member.user_id ?= @request.auth.id && @collection.organization_members:knowledge_member.status ?= 'active' && user_id = @request.auth.id && agent_id.user_id = @request.auth.id && agent_id.organization_id = organization_id && agent_id.instance_id.organization_id = organization_id",
+        "create": "@request.auth.id != '' && organization_id.status = 'active' && @collection.organization_members:knowledge_member.organization_id ?= organization_id && @collection.organization_members:knowledge_member.user_id ?= @request.auth.id && @collection.organization_members:knowledge_member.status ?= 'active' && user_id = @request.auth.id && agent_id.user_id = @request.auth.id && agent_id.organization_id = organization_id && agent_id.instance_id.organization_id = organization_id && (@collection.organization_members:knowledge_member.role ?= 'owner' || @collection.organization_members:knowledge_member.role ?= 'admin' || @collection.organization_members:knowledge_member.role ?= 'supervisor' || @collection.organization_members:knowledge_member.role ?= 'agent')",
+        "update": "@request.auth.id != '' && organization_id.status = 'active' && @collection.organization_members:knowledge_member.organization_id ?= organization_id && @collection.organization_members:knowledge_member.user_id ?= @request.auth.id && @collection.organization_members:knowledge_member.status ?= 'active' && user_id = @request.auth.id && agent_id.user_id = @request.auth.id && agent_id.organization_id = organization_id && agent_id.instance_id.organization_id = organization_id && (@collection.organization_members:knowledge_member.role ?= 'owner' || @collection.organization_members:knowledge_member.role ?= 'admin' || @collection.organization_members:knowledge_member.role ?= 'supervisor' || @collection.organization_members:knowledge_member.role ?= 'agent') && @request.body.organization_id:changed = false && @request.body.user_id:changed = false && @request.body.agent_id:changed = false",
+        "delete": "@request.auth.id != '' && organization_id.status = 'active' && @collection.organization_members:knowledge_member.organization_id ?= organization_id && @collection.organization_members:knowledge_member.user_id ?= @request.auth.id && @collection.organization_members:knowledge_member.status ?= 'active' && user_id = @request.auth.id && agent_id.user_id = @request.auth.id && agent_id.organization_id = organization_id && agent_id.instance_id.organization_id = organization_id && (@collection.organization_members:knowledge_member.role ?= 'owner' || @collection.organization_members:knowledge_member.role ?= 'admin' || @collection.organization_members:knowledge_member.role ?= 'supervisor' || @collection.organization_members:knowledge_member.role ?= 'agent')"
+      },
+      "fields": [
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "organization_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "organizations"
+        },
+        {
+          "name": "agent_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "ai_agents"
+        },
+        {
+          "name": "type",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "file",
+            "link"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "url",
+          "type": "url",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "file",
+          "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "content",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "stored",
+            "ready",
+            "error"
+          ]
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate"
+          ]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_agent_knowledge_sources_agent ON agent_knowledge_sources (agent_id)"
+      ]
     }
   ]
 }

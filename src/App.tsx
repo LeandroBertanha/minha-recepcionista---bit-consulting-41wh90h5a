@@ -773,6 +773,12 @@ function AgentsView({ organizationId }: { organizationId: string }) {
       ])
       setAgents(agentRows)
       setInstances(instanceRows)
+      setWorkspaceAgent((current) =>
+        current ? agentRows.find((agent) => agent.id === current.id) || null : null,
+      )
+      setSelectedAgent((current) =>
+        current ? agentRows.find((agent) => agent.id === current.id) || null : null,
+      )
     } catch {
       toast.error('Não foi possível carregar as recepcionistas.')
     } finally {

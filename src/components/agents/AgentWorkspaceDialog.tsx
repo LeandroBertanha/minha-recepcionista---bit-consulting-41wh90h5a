@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Bot, MessageCircle, Pencil, Plug, QrCode, Sparkles } from 'lucide-react'
+import { Bot, MessageCircle, Pencil, Plug, QrCode, Settings2, Sparkles } from 'lucide-react'
 import Inbox from '@/pages/Inbox'
 import { simulateAiAgent, type AiAgent } from '@/services/ai_agents'
+import { AgentConfigurationStudio } from '@/components/agents/AgentConfigurationStudio'
 import { fetchInstanceQR, getInstances, type WhatsAppInstance } from '@/services/whatsapp'
 import { Button } from '@/components/ui/button'
 import {
@@ -139,7 +140,7 @@ export function AgentWorkspaceDialog({
 
         <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
           <div className="border-b border-neutral-200 px-6 py-3 dark:border-white/10">
-            <TabsList className="grid w-full max-w-2xl grid-cols-3">
+            <TabsList className="grid w-full max-w-3xl grid-cols-4">
               <TabsTrigger value="conversations">
                 <MessageCircle className="mr-2 h-4 w-4" /> Conversas
               </TabsTrigger>
@@ -148,6 +149,9 @@ export function AgentWorkspaceDialog({
               </TabsTrigger>
               <TabsTrigger value="whatsapp">
                 <Plug className="mr-2 h-4 w-4" /> WhatsApp
+              </TabsTrigger>
+              <TabsTrigger value="configuration">
+                <Settings2 className="mr-2 h-4 w-4" /> Configuração
               </TabsTrigger>
             </TabsList>
           </div>
@@ -275,6 +279,15 @@ export function AgentWorkspaceDialog({
                 </div>
               ) : null}
             </div>
+          </TabsContent>
+
+          <TabsContent value="configuration" className="mt-0 flex-1 overflow-y-auto p-6">
+            <AgentConfigurationStudio
+              agent={agent}
+              onSaved={async () => {
+                await onRefresh()
+              }}
+            />
           </TabsContent>
         </Tabs>
       </DialogContent>
