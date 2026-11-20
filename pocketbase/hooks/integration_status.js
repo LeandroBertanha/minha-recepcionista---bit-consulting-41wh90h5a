@@ -37,13 +37,16 @@ routerAdd(
       if (role === 'owner' || role === 'admin') {
         const apiUrl = ($secrets.get('EVOLUTION_API_URL') || '').replace(/\/$/, '')
         const apiKey = $secrets.get('EVOLUTION_API_KEY') || ''
+        const apiOrigin = (
+          $secrets.get('EVOLUTION_API_ORIGIN') || 'https://airecepcionista.com.br'
+        ).replace(/\/$/, '')
         if (apiUrl && apiKey) {
           provider = { reachable: false }
           const response = $http.send({
             url:
               apiUrl + '/webhook/find/' + encodeURIComponent(instance.getString('instance_name')),
             method: 'GET',
-            headers: { apikey: apiKey },
+            headers: { apikey: apiKey, Origin: apiOrigin },
             timeout: 5,
           })
           if (response.statusCode === 200 && response.json) {
@@ -70,7 +73,7 @@ routerAdd(
                 '/instance/connectionState/' +
                 encodeURIComponent(instance.getString('instance_name')),
               method: 'GET',
-              headers: { apikey: apiKey },
+              headers: { apikey: apiKey, Origin: apiOrigin },
               timeout: 5,
             })
             if (connection.statusCode === 200)
@@ -81,7 +84,7 @@ routerAdd(
                 '/instance/fetchInstances?instanceName=' +
                 encodeURIComponent(instance.getString('instance_name')),
               method: 'GET',
-              headers: { apikey: apiKey },
+              headers: { apikey: apiKey, Origin: apiOrigin },
               timeout: 5,
             })
             if (details.statusCode === 200 && Array.isArray(details.json)) {
@@ -100,7 +103,11 @@ routerAdd(
                 '/chat/findMessages/' +
                 encodeURIComponent(instance.getString('instance_name')),
               method: 'POST',
-              headers: { apikey: apiKey, 'Content-Type': 'application/json' },
+              headers: {
+                apikey: apiKey,
+                Origin: apiOrigin,
+                'Content-Type': 'application/json',
+              },
               body: JSON.stringify({ where: {}, page: 1, offset: 20 }),
               timeout: 5,
             })

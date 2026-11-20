@@ -18,8 +18,24 @@ test('a Evolution API recebe o segredo no cadastro do webhook', async () => {
 
   assert.match(source, /EVOLUTION_WEBHOOK_SECRET/)
   assert.match(source, /headers:[\s\S]*X-Bitzaap-Webhook-Secret/)
-  assert.match(source, /webhookByEvents: false/)
-  assert.match(source, /webhookBase64: false/)
+  assert.match(source, /byEvents: false/)
+  assert.match(source, /base64: false/)
+})
+
+test('todas as chamadas da Evolution enviam a origem autorizada', async () => {
+  for (const path of [
+    'pocketbase/hooks/instance_create.js',
+    'pocketbase/hooks/instance_logout.js',
+    'pocketbase/hooks/instance_qr.js',
+    'pocketbase/hooks/integration_status.js',
+    'pocketbase/hooks/message_send.js',
+    'pocketbase/hooks/on_message_create_ai.js',
+    'pocketbase/hooks/webhook_evolution.js',
+  ]) {
+    const source = await read(path)
+    assert.match(source, /EVOLUTION_API_ORIGIN/, path)
+    assert.match(source, /Origin:/, path)
+  }
 })
 
 test('mensagens não são persistidas como enviadas sem configuração', async () => {

@@ -35,6 +35,9 @@ routerAdd(
 
     const apiUrl = $secrets.get('EVOLUTION_API_URL')
     const apiKey = $secrets.get('EVOLUTION_API_KEY')
+    const apiOrigin = (
+      $secrets.get('EVOLUTION_API_ORIGIN') || 'https://airecepcionista.com.br'
+    ).replace(/\/$/, '')
 
     if (!apiUrl || !apiKey) {
       return e.json(503, { message: 'Evolution API configuration missing' })
@@ -50,6 +53,7 @@ routerAdd(
         method: 'DELETE',
         headers: {
           apikey: apiKey,
+          Origin: apiOrigin,
           'Content-Type': 'application/json',
         },
         timeout: 10,

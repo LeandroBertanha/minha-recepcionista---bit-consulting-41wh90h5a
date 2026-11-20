@@ -121,6 +121,9 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
       if (type !== 'text') {
         const evoUrl = $secrets.get('EVOLUTION_API_URL')
         const evoKey = $secrets.get('EVOLUTION_API_KEY')
+        const evoOrigin = (
+          $secrets.get('EVOLUTION_API_ORIGIN') || 'https://airecepcionista.com.br'
+        ).replace(/\/$/, '')
         if (evoUrl && evoKey) {
           try {
             let evoUrlSanitized = evoUrl
@@ -129,7 +132,11 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
             const mediaRes = $http.send({
               url: evoUrlSanitized + '/chat/getBase64FromMediaMessage/' + instanceName,
               method: 'POST',
-              headers: { apikey: evoKey, 'Content-Type': 'application/json' },
+              headers: {
+                apikey: evoKey,
+                Origin: evoOrigin,
+                'Content-Type': 'application/json',
+              },
               body: JSON.stringify({
                 message: {
                   key: body.data?.key,

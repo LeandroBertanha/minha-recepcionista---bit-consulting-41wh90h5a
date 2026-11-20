@@ -67,6 +67,7 @@ async function execute({
         ({
           EVOLUTION_API_URL: 'https://evolution.example.test',
           EVOLUTION_API_KEY: 'evolution-fixture-key',
+          EVOLUTION_API_ORIGIN: 'https://airecepcionista.com.br',
           OPENAI_API_KEY: openAiKey,
           OPENAI_MODEL: 'gpt-6-luna',
         })[name],
@@ -143,6 +144,7 @@ test('IA usa somente o agente, histórico e instância do login que recebeu a me
   assert.match(completion.body, /Pergunta de Richard/)
   const send = result.calls.find((call) => call.url.includes('/message/sendText/'))
   assert.equal(send.url, 'https://evolution.example.test/message/sendText/session-richard')
+  assert.equal(send.headers.Origin, 'https://airecepcionista.com.br')
   assert.equal(result.calls.filter((call) => call.url.includes('/message/sendText/')).length, 1)
   const response = result.saves.find((row) => row.message_id === 'ai-provider-id')
   assert.equal(response.instance_id, 'richard-instance')

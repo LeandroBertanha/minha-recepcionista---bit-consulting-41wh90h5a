@@ -34,6 +34,9 @@ routerAdd(
 
     let evoUrl = ($secrets.get('EVOLUTION_API_URL') || '').replace(/\/$/, '')
     const evoKey = $secrets.get('EVOLUTION_API_KEY')
+    const evoOrigin = (
+      $secrets.get('EVOLUTION_API_ORIGIN') || 'https://airecepcionista.com.br'
+    ).replace(/\/$/, '')
     const instanceName = instance.getString('instance_name')
     const webhookUrl = ($secrets.get('APP_WEBHOOK_URL') || '').replace(/\/$/, '')
     const webhookSecret = $secrets.get('EVOLUTION_WEBHOOK_SECRET') || ''
@@ -46,7 +49,7 @@ routerAdd(
         const options = {
           url: evoUrl + path,
           method: method || 'GET',
-          headers: { apikey: evoKey },
+          headers: { apikey: evoKey, Origin: evoOrigin },
           timeout: 20,
         }
         if (body) {

@@ -136,6 +136,9 @@ onRecordAfterCreateSuccess(async (e) => {
 
     const evoUrl = $secrets.get('EVOLUTION_API_URL') || ''
     const evoKey = $secrets.get('EVOLUTION_API_KEY') || ''
+    const evoOrigin = (
+      $secrets.get('EVOLUTION_API_ORIGIN') || 'https://airecepcionista.com.br'
+    ).replace(/\/$/, '')
     if (!evoUrl || !evoKey) {
       $app.logger().error('Human handoff notification config missing', 'request_id', requestId)
       return
@@ -146,7 +149,11 @@ onRecordAfterCreateSuccess(async (e) => {
       const response = $http.send({
         url: evoUrlSanitized + '/message/sendText/' + instanceName,
         method: 'POST',
-        headers: { apikey: evoKey, 'Content-Type': 'application/json' },
+        headers: {
+          apikey: evoKey,
+          Origin: evoOrigin,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           number: interventionNumber,
           text: 'A recepcionista pausou uma conversa que precisa de atendimento humano. Acesse a plataforma Minha Recepcionista para assumir.',
@@ -463,13 +470,20 @@ onRecordAfterCreateSuccess(async (e) => {
     if (reply) {
       const evoUrl = $secrets.get('EVOLUTION_API_URL')
       const evoKey = $secrets.get('EVOLUTION_API_KEY')
+      const evoOrigin = (
+        $secrets.get('EVOLUTION_API_ORIGIN') || 'https://airecepcionista.com.br'
+      ).replace(/\/$/, '')
 
       if (evoUrl && evoKey) {
         let evoUrlSanitized = evoUrl.endsWith('/') ? evoUrl.slice(0, -1) : evoUrl
         const res = $http.send({
           url: evoUrlSanitized + '/message/sendText/' + instanceName,
           method: 'POST',
-          headers: { apikey: evoKey, 'Content-Type': 'application/json' },
+          headers: {
+            apikey: evoKey,
+            Origin: evoOrigin,
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify({
             number: contact.getString('remote_jid'),
             text: reply,

@@ -43,6 +43,7 @@ function execute({
       get: (name) => ({
         EVOLUTION_API_URL: 'https://evolution.example.test',
         EVOLUTION_API_KEY: 'test-api-key',
+        EVOLUTION_API_ORIGIN: 'https://airecepcionista.com.br',
         APP_WEBHOOK_URL: 'https://app.example.test',
         EVOLUTION_WEBHOOK_SECRET: 'test-webhook-secret',
       })[name],
@@ -140,4 +141,9 @@ test('o dono da sessão conectada ainda recebe o próprio QR sem chamadas que al
 
   assert.equal(result.response.status, 200)
   assert.equal(result.calls.some((call) => call.url.includes('/instance/connect/')), false)
+  assert.ok(result.calls.length > 0)
+  assert.equal(
+    result.calls.every((call) => call.headers.Origin === 'https://airecepcionista.com.br'),
+    true,
+  )
 })
