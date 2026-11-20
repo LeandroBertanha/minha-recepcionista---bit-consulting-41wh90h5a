@@ -74,9 +74,10 @@ test('acionamento humano avisa a equipe pela instância da própria recepcionist
   const hook = await read('pocketbase/hooks/on_message_create_ai.js')
   const notification = hook.slice(
     hook.indexOf('const notifyHumanHandoff'),
-    hook.indexOf('onRecordAfterCreateSuccess'),
+    hook.indexOf('const msg = e.record'),
   )
 
+  assert.ok(hook.indexOf('onRecordAfterCreateSuccess') < hook.indexOf('const notifyHumanHandoff'))
   assert.match(hook, /notifyHumanHandoff\(handoff, messageInstance\.getString\('instance_name'\)/)
   assert.match(notification, /handoff\.intervention_number/)
   assert.match(notification, /\/message\/sendText\/.*instanceName/)
