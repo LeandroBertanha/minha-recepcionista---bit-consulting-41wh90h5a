@@ -130,6 +130,55 @@ const resumeDelayMilliseconds = (value) => {
   return hours[value] ? hours[value] * 60 * 60 * 1000 : 0
 }
 
+const notifyHumanHandoff = (handoff, instanceName, requestId) => {
+  const interventionNumber = digitsOnly(handoff.intervention_number)
+  if (!interventionNumber || !instanceName) return
+
+  const evoUrl = $secrets.get('EVOLUTION_API_URL') || ''
+  const evoKey = $secrets.get('EVOLUTION_API_KEY') || ''
+  if (!evoUrl || !evoKey) {
+    $app.logger().error('Human handoff notification config missing', 'request_id', requestId)
+    return
+  }
+
+  const evoUrlSanitized = evoUrl.endsWith('/') ? evoUrl.slice(0, -1) : evoUrl
+  try {
+    const response = $http.send({
+      url: evoUrlSanitized + '/message/sendText/' + instanceName,
+      method: 'POST',
+      headers: { apikey: evoKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        number: interventionNumber,
+        text: 'A recepcionista pausou uma conversa que precisa de atendimento humano. Acesse a plataforma Minha Recepcionista para assumir.',
+        delay: 0,
+      }),
+      timeout: 15,
+    })
+
+    if (response.statusCode !== 200 && response.statusCode !== 201) {
+      $app
+        .logger()
+        .error(
+          'Human handoff notification failed',
+          'request_id',
+          requestId,
+          'status',
+          response.statusCode,
+        )
+    }
+  } catch (error) {
+    $app
+      .logger()
+      .error(
+        'Human handoff notification transport failed',
+        'request_id',
+        requestId,
+        'error_type',
+        error && error.name ? error.name : 'request_failed',
+      )
+  }
+}
+
 onRecordAfterCreateSuccess(async (e) => {
   const msg = e.record
   if (msg.getString('direction') !== 'in') return e.next()
@@ -222,8 +271,18 @@ onRecordAfterCreateSuccess(async (e) => {
     $app.saveNoValidate(contact)
   }
 
-  const provider = agent.getString('provider')
   const requestId = 'ai_' + $security.randomString(8)
+  const currentBody = msg.getString('body')
+  if (currentBody && shouldHandoffImmediately(currentBody, handoff)) {
+    contact.set('agent_paused', true)
+    contact.set('status', 'waiting')
+    $app.saveNoValidate(contact)
+    notifyHumanHandoff(handoff, messageInstance.getString('instance_name'), requestId)
+    $app.logger().info('Conversation paused for human handoff', 'contact_id', contact.id)
+    return e.next()
+  }
+
+  const provider = agent.getString('provider')
   let apiKey = ''
 
   if (provider === 'openai') apiKey = $secrets.get('OPENAI_API_KEY') || ''
@@ -290,14 +349,6 @@ onRecordAfterCreateSuccess(async (e) => {
       .join('\n')
 
     if (!combinedBody) return e.next()
-
-    if (shouldHandoffImmediately(combinedBody, handoff)) {
-      contact.set('agent_paused', true)
-      contact.set('status', 'waiting')
-      $app.saveNoValidate(contact)
-      $app.logger().info('Conversation paused for human handoff', 'contact_id', contact.id)
-      return e.next()
-    }
 
     const model =
       provider === 'openai'

@@ -53,7 +53,7 @@ test('motor aplica configuração no WhatsApp e no simulador', async () => {
   assert.match(hook, /loadKnowledgeContext\(agent\.id, organizationId, sessionUserId\)/)
   assert.match(hook, /remoteJid\.endsWith\('@g\.us'\)/)
   assert.match(hook, /blockedNumbers\.includes\(remoteNumber\)/)
-  assert.match(hook, /shouldHandoffImmediately\(combinedBody, handoff\)/)
+  assert.match(hook, /shouldHandoffImmediately\(currentBody, handoff\)/)
   assert.match(hook, /contact\.set\('agent_paused', true\)/)
   assert.match(hook, /contact\.set\('status', 'waiting'\)/)
   assert.match(simulator, /buildReceptionistContext\(configuration\)/)
@@ -68,4 +68,19 @@ test('base de conhecimento é tratada como dado e tem limite de contexto', async
   assert.match(hook, /used >= 40000/)
   assert.match(hook, /slice\(0, limit\)/)
   assert.doesNotMatch(hook, /logger\(\).*configuration|logger\(\).*knowledge/i)
+})
+
+test('acionamento humano avisa a equipe pela instância da própria recepcionista', async () => {
+  const hook = await read('pocketbase/hooks/on_message_create_ai.js')
+  const notification = hook.slice(
+    hook.indexOf('const notifyHumanHandoff'),
+    hook.indexOf('onRecordAfterCreateSuccess'),
+  )
+
+  assert.match(hook, /notifyHumanHandoff\(handoff, messageInstance\.getString\('instance_name'\)/)
+  assert.match(notification, /handoff\.intervention_number/)
+  assert.match(notification, /\/message\/sendText\/.*instanceName/)
+  assert.match(notification, /number: interventionNumber/)
+  assert.match(notification, /Acesse a plataforma Minha Recepcionista para assumir/)
+  assert.doesNotMatch(notification, /remote_jid|contact\.getString|combinedBody/)
 })
