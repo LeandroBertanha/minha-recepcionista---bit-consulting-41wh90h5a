@@ -82,6 +82,6 @@ test('acionamento humano avisa a equipe pela instância da própria recepcionist
   assert.match(notification, /handoff\.intervention_number/)
   assert.match(notification, /\/message\/sendText\/.*instanceName/)
   assert.match(notification, /number: interventionNumber/)
-  assert.match(notification, /Acesse a plataforma Minha Recepcionista para assumir/)
+  assert.match(notification, /Acesse a plataforma AI Recepcionista para assumir/)
   assert.doesNotMatch(notification, /remote_jid|contact\.getString|combinedBody/)
 })

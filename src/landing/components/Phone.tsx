@@ -23,10 +23,10 @@ export function PhoneFrame({
         <div className="absolute left-1/2 top-2 z-20 h-[22px] w-[84px] -translate-x-1/2 rounded-full bg-ink" />
         <div className="relative z-10 flex items-center gap-2.5 bg-wa-deep px-4 pb-2.5 pt-9 text-white">
           <div className="grid h-8 w-8 place-items-center rounded-full bg-wa text-[11px] font-bold text-ink">
-            MR
+            AI
           </div>
           <div className="min-w-0 leading-tight">
-            <p className="truncate font-landing text-[13px] font-semibold">Minha Recepcionista</p>
+            <p className="truncate font-landing text-[13px] font-semibold">AI Recepcionista</p>
             <p className="font-machine text-[10px] text-white/70">
               online · atendendo {contactName}
             </p>

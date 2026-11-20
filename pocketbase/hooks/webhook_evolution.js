@@ -84,6 +84,35 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
       let mediaBase64 = ''
       let text = ''
 
+      const decodeBase64 = (value) => {
+        const b64 = String(value || '').replace(/[^A-Za-z0-9+/=]/g, '')
+        if (!b64) return new Uint8Array(0)
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+        const lookup = new Uint8Array(256)
+        for (let i = 0; i < chars.length; i++) lookup[chars.charCodeAt(i)] = i
+
+        let bufferLength = b64.length * 0.75
+        if (b64[b64.length - 1] === '=') bufferLength--
+        if (b64[b64.length - 2] === '=') bufferLength--
+
+        const bytes = new Uint8Array(bufferLength)
+        let position = 0
+        for (let i = 0; i < b64.length; i += 4) {
+          const encoded1 = lookup[b64.charCodeAt(i)]
+          const encoded2 = lookup[b64.charCodeAt(i + 1)]
+          const encoded3 = lookup[b64.charCodeAt(i + 2)]
+          const encoded4 = lookup[b64.charCodeAt(i + 3)]
+          bytes[position++] = (encoded1 << 2) | (encoded2 >> 4)
+          if (position < bufferLength) {
+            bytes[position++] = ((encoded2 & 15) << 4) | (encoded3 >> 2)
+          }
+          if (position < bufferLength) {
+            bytes[position++] = ((encoded3 & 3) << 6) | (encoded4 & 63)
+          }
+        }
+        return bytes
+      }
+
       const extFromMime = (mt) => {
         if (!mt) return ''
         const sub = mt.split(';')[0].split('/')[1] || ''
@@ -121,6 +150,9 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
       if (type !== 'text') {
         const evoUrl = $secrets.get('EVOLUTION_API_URL')
         const evoKey = $secrets.get('EVOLUTION_API_KEY')
+        const evoOrigin = (
+          $secrets.get('EVOLUTION_API_ORIGIN') || 'https://airecepcionista.com.br'
+        ).replace(/\/$/, '')
         if (evoUrl && evoKey) {
           try {
             let evoUrlSanitized = evoUrl
@@ -129,7 +161,11 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
             const mediaRes = $http.send({
               url: evoUrlSanitized + '/chat/getBase64FromMediaMessage/' + instanceName,
               method: 'POST',
-              headers: { apikey: evoKey, 'Content-Type': 'application/json' },
+              headers: {
+                apikey: evoKey,
+                Origin: evoOrigin,
+                'Content-Type': 'application/json',
+              },
               body: JSON.stringify({
                 message: {
                   key: body.data?.key,
@@ -166,6 +202,67 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
         }
       }
 
+      if (type === 'audio' && !fromMe && mediaBase64) {
+        const openAiKey = $secrets.get('OPENAI_API_KEY') || ''
+        if (openAiKey) {
+          try {
+            const audioBytes = decodeBase64(mediaBase64)
+            if (audioBytes.length > 0 && audioBytes.length <= 25 * 1024 * 1024) {
+              const formData = new FormData()
+              formData.append(
+                'file',
+                $filesystem.fileFromBytes(audioBytes, fileName || 'audio.ogg'),
+              )
+              formData.append(
+                'model',
+                $secrets.get('OPENAI_TRANSCRIPTION_MODEL') || 'gpt-transcribe',
+              )
+
+              const transcriptionRes = $http.send({
+                url: 'https://api.openai.com/v1/audio/transcriptions',
+                method: 'POST',
+                headers: { Authorization: 'Bearer ' + openAiKey },
+                body: formData,
+                timeout: 60,
+              })
+
+              if (
+                transcriptionRes.statusCode >= 200 &&
+                transcriptionRes.statusCode < 300 &&
+                transcriptionRes.json &&
+                transcriptionRes.json.text
+              ) {
+                text = String(transcriptionRes.json.text).trim().slice(0, 12000)
+              } else {
+                $app
+                  .logger()
+                  .warn(
+                    'Audio transcription failed',
+                    'instance',
+                    instanceName,
+                    'statusCode',
+                    transcriptionRes.statusCode,
+                  )
+              }
+            } else if (audioBytes.length > 25 * 1024 * 1024) {
+              $app
+                .logger()
+                .warn('Audio transcription skipped due to size limit', 'instance', instanceName)
+            }
+          } catch (error) {
+            $app
+              .logger()
+              .warn(
+                'Audio transcription transport failed',
+                'instance',
+                instanceName,
+                'error_type',
+                error && error.name ? error.name : 'request_failed',
+              )
+          }
+        }
+      }
+
       let contact
       try {
         const records = $app.findRecordsByFilter(
@@ -192,7 +289,13 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
         contact.set('phone', remoteJid.split('@')[0])
       }
 
-      contact.set('last_message', type !== 'text' ? '📷 Mídia' : text)
+      const mediaPreview = {
+        image: '📷 Foto',
+        audio: text ? '🎵 Áudio: ' + text.slice(0, 120) : '🎵 Áudio',
+        document: '📄 Documento',
+        video: '🎥 Vídeo',
+      }
+      contact.set('last_message', type === 'text' ? text : mediaPreview[type] || '📎 Mídia')
       contact.set('last_message_at', new Date().toISOString())
       $app.saveNoValidate(contact)
 
@@ -214,26 +317,7 @@ routerAdd('POST', '/backend/v1/webhook/evolution', (e) => {
 
       if (mediaBase64) {
         try {
-          const b64 = mediaBase64.replace(/[^A-Za-z0-9+/=]/g, '')
-          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-          const lookup = new Uint8Array(256)
-          for (let i = 0; i < chars.length; i++) lookup[chars.charCodeAt(i)] = i
-
-          let bufferLength = b64.length * 0.75
-          if (b64[b64.length - 1] === '=') bufferLength--
-          if (b64[b64.length - 2] === '=') bufferLength--
-
-          const bytes = new Uint8Array(bufferLength)
-          let p = 0
-          for (let i = 0; i < b64.length; i += 4) {
-            let encoded1 = lookup[b64.charCodeAt(i)]
-            let encoded2 = lookup[b64.charCodeAt(i + 1)]
-            let encoded3 = lookup[b64.charCodeAt(i + 2)]
-            let encoded4 = lookup[b64.charCodeAt(i + 3)]
-            bytes[p++] = (encoded1 << 2) | (encoded2 >> 4)
-            if (p < bufferLength) bytes[p++] = ((encoded2 & 15) << 4) | (encoded3 >> 2)
-            if (p < bufferLength) bytes[p++] = ((encoded3 & 3) << 6) | (encoded4 & 63)
-          }
+          const bytes = decodeBase64(mediaBase64)
           msgRecord.set('media_file', $filesystem.fileFromBytes(bytes, fileName || 'media'))
         } catch (e) {
           $app.logger().warn('Failed to parse media base64', 'error', String(e))

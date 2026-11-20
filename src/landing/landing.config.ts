@@ -17,7 +17,7 @@ export type Testimonial = { name: string; role: string; company: string; quote: 
 export type ResultMetric = { label: string; value: string; context: string }
 
 export const landingConfig = {
-  productName: 'Minha Recepcionista',
+  productName: 'AI Recepcionista',
   companyName: 'Bit Consulting',
   partners: 'Bit Consulting e AI.R Innovation',
   siteUrl: 'https://minharecepcionista.com.br',

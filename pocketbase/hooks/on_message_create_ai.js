@@ -17,6 +17,21 @@ onRecordAfterCreateSuccess(async (e) => {
     String(value || '')
       .trim()
       .slice(0, limit)
+  const encodeBase64 = (bytes) => {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+    let output = ''
+    for (let index = 0; index < bytes.length; index += 3) {
+      const first = bytes[index]
+      const second = index + 1 < bytes.length ? bytes[index + 1] : 0
+      const third = index + 2 < bytes.length ? bytes[index + 2] : 0
+      const value = (first << 16) | (second << 8) | third
+      output += alphabet[(value >> 18) & 63]
+      output += alphabet[(value >> 12) & 63]
+      output += index + 1 < bytes.length ? alphabet[(value >> 6) & 63] : '='
+      output += index + 2 < bytes.length ? alphabet[value & 63] : '='
+    }
+    return output
+  }
   const buildReceptionistContext = (configuration) => {
     const knowledge = configuration.knowledge || {}
     const behavior = configuration.behavior || {}
@@ -136,6 +151,9 @@ onRecordAfterCreateSuccess(async (e) => {
 
     const evoUrl = $secrets.get('EVOLUTION_API_URL') || ''
     const evoKey = $secrets.get('EVOLUTION_API_KEY') || ''
+    const evoOrigin = (
+      $secrets.get('EVOLUTION_API_ORIGIN') || 'https://airecepcionista.com.br'
+    ).replace(/\/$/, '')
     if (!evoUrl || !evoKey) {
       $app.logger().error('Human handoff notification config missing', 'request_id', requestId)
       return
@@ -146,10 +164,14 @@ onRecordAfterCreateSuccess(async (e) => {
       const response = $http.send({
         url: evoUrlSanitized + '/message/sendText/' + instanceName,
         method: 'POST',
-        headers: { apikey: evoKey, 'Content-Type': 'application/json' },
+        headers: {
+          apikey: evoKey,
+          Origin: evoOrigin,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           number: interventionNumber,
-          text: 'A recepcionista pausou uma conversa que precisa de atendimento humano. Acesse a plataforma Minha Recepcionista para assumir.',
+          text: 'A recepcionista pausou uma conversa que precisa de atendimento humano. Acesse a plataforma AI Recepcionista para assumir.',
           delay: 0,
         }),
         timeout: 15,
@@ -342,6 +364,10 @@ onRecordAfterCreateSuccess(async (e) => {
     newInMessages.reverse()
     pastHistory.reverse()
 
+    const respondWithAudio =
+      provider === 'openai' &&
+      newInMessages.some((message) => message.getString('type') === 'audio')
+
     const combinedBody = newInMessages
       .map((m) => m.getString('body'))
       .filter(Boolean)
@@ -463,20 +489,116 @@ onRecordAfterCreateSuccess(async (e) => {
     if (reply) {
       const evoUrl = $secrets.get('EVOLUTION_API_URL')
       const evoKey = $secrets.get('EVOLUTION_API_KEY')
+      const evoOrigin = (
+        $secrets.get('EVOLUTION_API_ORIGIN') || 'https://airecepcionista.com.br'
+      ).replace(/\/$/, '')
 
       if (evoUrl && evoKey) {
         let evoUrlSanitized = evoUrl.endsWith('/') ? evoUrl.slice(0, -1) : evoUrl
-        const res = $http.send({
-          url: evoUrlSanitized + '/message/sendText/' + instanceName,
-          method: 'POST',
-          headers: { apikey: evoKey, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            number: contact.getString('remote_jid'),
-            text: reply,
-            delay: 0,
-          }),
-          timeout: 15,
-        })
+        const evolutionHeaders = {
+          apikey: evoKey,
+          Origin: evoOrigin,
+          'Content-Type': 'application/json',
+        }
+        let responseType = 'text'
+        let responseMimeType = ''
+        let responseFileName = ''
+        let responseAudioBytes = null
+        let res = null
+
+        if (respondWithAudio) {
+          try {
+            const speechRes = $http.send({
+              url: 'https://api.openai.com/v1/audio/speech',
+              method: 'POST',
+              headers: {
+                Authorization: 'Bearer ' + apiKey,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: $secrets.get('OPENAI_TTS_MODEL') || 'gpt-4o-mini-tts',
+                voice: $secrets.get('OPENAI_TTS_VOICE') || 'marin',
+                input: reply,
+                instructions:
+                  'Fale em português do Brasil, com voz natural, acolhedora e profissional.',
+                response_format: 'opus',
+              }),
+              timeout: 60,
+            })
+
+            if (
+              speechRes.statusCode >= 200 &&
+              speechRes.statusCode < 300 &&
+              speechRes.body &&
+              speechRes.body.length > 0
+            ) {
+              responseAudioBytes = speechRes.body
+              res = $http.send({
+                url: evoUrlSanitized + '/message/sendWhatsAppAudio/' + instanceName,
+                method: 'POST',
+                headers: evolutionHeaders,
+                body: JSON.stringify({
+                  number: contact.getString('remote_jid'),
+                  audio: encodeBase64(responseAudioBytes),
+                  delay: 1200,
+                  encoding: true,
+                }),
+                timeout: 60,
+              })
+              if (res.statusCode === 200 || res.statusCode === 201) {
+                responseType = 'audio'
+                responseMimeType = 'audio/ogg'
+                responseFileName = 'resposta-ia.opus'
+              } else {
+                $app
+                  .logger()
+                  .warn(
+                    'Evolution audio send failed; falling back to text',
+                    'request_id',
+                    requestId,
+                    'status',
+                    res.statusCode,
+                  )
+                res = null
+                responseAudioBytes = null
+              }
+            } else {
+              $app
+                .logger()
+                .warn(
+                  'Speech synthesis failed; falling back to text',
+                  'request_id',
+                  requestId,
+                  'status',
+                  speechRes.statusCode,
+                )
+            }
+          } catch (speechError) {
+            $app
+              .logger()
+              .warn(
+                'Speech synthesis transport failed; falling back to text',
+                'request_id',
+                requestId,
+                'error_type',
+                speechError && speechError.name ? speechError.name : 'request_failed',
+              )
+          }
+        }
+
+        if (!res) {
+          res = $http.send({
+            url: evoUrlSanitized + '/message/sendText/' + instanceName,
+            method: 'POST',
+            headers: evolutionHeaders,
+            body: JSON.stringify({
+              number: contact.getString('remote_jid'),
+              text: reply,
+              delay: 0,
+            }),
+            timeout: 15,
+          })
+        }
 
         if (res.statusCode === 200 || res.statusCode === 201) {
           let messageId = 'msg_' + $security.randomString(10)
@@ -493,11 +615,20 @@ onRecordAfterCreateSuccess(async (e) => {
           msgRecord.set('message_id', messageId)
           msgRecord.set('direction', 'out')
           msgRecord.set('body', reply)
-          msgRecord.set('type', 'text')
+          msgRecord.set('type', responseType)
+          msgRecord.set('mime_type', responseMimeType)
+          msgRecord.set('file_name', responseFileName)
+          msgRecord.set('caption', reply)
           msgRecord.set('sent_at', new Date().toISOString())
+          if (responseType === 'audio' && responseAudioBytes) {
+            msgRecord.set(
+              'media_file',
+              $filesystem.fileFromBytes(responseAudioBytes, responseFileName),
+            )
+          }
           $app.saveNoValidate(msgRecord)
 
-          contact.set('last_message', reply)
+          contact.set('last_message', responseType === 'audio' ? '🎵 Áudio da IA' : reply)
           contact.set('last_message_at', new Date().toISOString())
           $app.saveNoValidate(contact)
         } else {

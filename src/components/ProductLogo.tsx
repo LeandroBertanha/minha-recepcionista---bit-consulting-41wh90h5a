@@ -22,7 +22,7 @@ export function ProductLogo({
         height={32}
         className="h-8 w-8"
       />
-      <span className={tone === 'dark' ? 'text-white' : 'text-[#0A0A0A]'}>Minha Recepcionista</span>
+      <span className={tone === 'dark' ? 'text-white' : 'text-[#0A0A0A]'}>AI Recepcionista</span>
     </span>
   )
 }

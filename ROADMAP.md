@@ -1,4 +1,4 @@
-# Roadmap — Minha Recepcionista
+# Roadmap - AI Recepcionista
 
 Atualizado em 12 de novembro de 2026.
 

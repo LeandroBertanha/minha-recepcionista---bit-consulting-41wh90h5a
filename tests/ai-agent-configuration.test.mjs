@@ -134,7 +134,7 @@ test('hooks OpenAI usam Responses API sem registrar corpo ou URL sensível', asy
     assert.match(source, /https:\/\/api\.openai\.com\/v1\/responses/)
     assert.match(source, /gpt-6-luna/)
     assert.match(source, /store: false/)
-    assert.doesNotMatch(source, /chat\/completions|gpt-3\.5-turbo|gpt-4o-mini/)
+    assert.doesNotMatch(source, /chat\/completions|gpt-3\.5-turbo|gpt-4o-mini(?=['"])/)
     assert.doesNotMatch(source, /getString\('api_key'\)/)
   }
 

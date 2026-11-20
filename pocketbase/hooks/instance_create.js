@@ -50,6 +50,9 @@ onRecordAfterCreateSuccess(
 
         let evoUrl = $secrets.get('EVOLUTION_API_URL') || ''
         const evoKey = $secrets.get('EVOLUTION_API_KEY') || ''
+        const evoOrigin = (
+          $secrets.get('EVOLUTION_API_ORIGIN') || 'https://airecepcionista.com.br'
+        ).replace(/\/$/, '')
         let webhookUrl = $secrets.get('APP_WEBHOOK_URL') || ''
         const webhookSecret = $secrets.get('EVOLUTION_WEBHOOK_SECRET') || ''
 
@@ -83,7 +86,11 @@ onRecordAfterCreateSuccess(
           const createRes = $http.send({
             url: evoUrl + '/instance/create',
             method: 'POST',
-            headers: { apikey: evoKey, 'Content-Type': 'application/json' },
+            headers: {
+              apikey: evoKey,
+              Origin: evoOrigin,
+              'Content-Type': 'application/json',
+            },
             body: JSON.stringify(createBody),
             timeout: 15,
           })
@@ -93,7 +100,11 @@ onRecordAfterCreateSuccess(
               const webhookRes = $http.send({
                 url: evoUrl + '/webhook/set/' + instanceName,
                 method: 'POST',
-                headers: { apikey: evoKey, 'Content-Type': 'application/json' },
+                headers: {
+                  apikey: evoKey,
+                  Origin: evoOrigin,
+                  'Content-Type': 'application/json',
+                },
                 body: JSON.stringify({
                   webhook: {
                     enabled: true,

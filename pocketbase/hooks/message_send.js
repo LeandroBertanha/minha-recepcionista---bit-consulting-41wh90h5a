@@ -55,6 +55,9 @@ routerAdd(
 
     const evoUrl = $secrets.get('EVOLUTION_API_URL')
     const evoKey = $secrets.get('EVOLUTION_API_KEY')
+    const evoOrigin = (
+      $secrets.get('EVOLUTION_API_ORIGIN') || 'https://airecepcionista.com.br'
+    ).replace(/\/$/, '')
 
     if (!evoUrl || !evoKey) {
       throw new InternalServerError('Evolution API configuration missing')
@@ -96,7 +99,11 @@ routerAdd(
         res = $http.send({
           url: evoUrlSanitized + '/message/sendWhatsAppAudio/' + instanceName,
           method: 'POST',
-          headers: { apikey: evoKey, 'Content-Type': 'application/json' },
+          headers: {
+            apikey: evoKey,
+            Origin: evoOrigin,
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify({
             number: contact.getString('remote_jid'),
             audio: mediaBase64,
@@ -109,7 +116,11 @@ routerAdd(
         res = $http.send({
           url: evoUrlSanitized + '/message/sendMedia/' + instanceName,
           method: 'POST',
-          headers: { apikey: evoKey, 'Content-Type': 'application/json' },
+          headers: {
+            apikey: evoKey,
+            Origin: evoOrigin,
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify({
             number: contact.getString('remote_jid'),
             mediatype: type,
@@ -125,7 +136,11 @@ routerAdd(
         res = $http.send({
           url: evoUrlSanitized + '/message/sendText/' + instanceName,
           method: 'POST',
-          headers: { apikey: evoKey, 'Content-Type': 'application/json' },
+          headers: {
+            apikey: evoKey,
+            Origin: evoOrigin,
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify({
             number: contact.getString('remote_jid'),
             text: text,
